@@ -56,6 +56,8 @@
             background: white;
             padding: 20px;
             box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+            position: relative;
+            z-index: 3;
         }
 
         .main-content {
@@ -284,6 +286,8 @@
             padding: 20px;
             border-radius: 16px;
             box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+            position: relative;
+            z-index: 1;
         }
 
         .email-viewer-header {
@@ -293,6 +297,9 @@
             margin-bottom: 20px;
             padding-bottom: 10px;
             border-bottom: 1px solid #eceff1;
+            position: relative;
+            z-index: 2;
+            background: white;
         }
 
         .back-button {
@@ -309,23 +316,29 @@
             background: #f1f3f4;
         }
 
-        .email-actions button {
-            background: none;
-            border: none;
-            color: #5f6368;
-            cursor: pointer;
-            padding: 8px 16px;
-            margin-left: 8px;
-            border-radius: 4px;
+        .email-content-wrapper {
+            position: relative;
+            max-width: 100%;
+            overflow: auto;
+            background: white;
+            width: 100%;
+            contain: content;
         }
 
-        .email-actions button:hover {
-            background: #f1f3f4;
-            color: #1a73e8;
-        }
-
-        .email-full-content {
+        .email-full-body {
+            line-height: 1.6;
+            color: #202124;
             padding: 20px;
+            background: white;
+            overflow-x: auto;
+            max-width: 100%;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .email-full-body * {
+            max-width: 100% !important;
+            box-sizing: border-box;
         }
 
         .email-full-header {
@@ -343,18 +356,12 @@
             margin-bottom: 8px;
         }
 
-        .email-full-body {
-            line-height: 1.6;
-            color: #202124;
-            max-width: 100%;
-            overflow-x: auto;
-            padding: 20px;
-            background: white;
-        }
-
         .email-full-body img {
-            max-width: 100%;
-            height: auto;
+            max-width: 100% !important;
+            height: auto !important;
+            display: block;
+            margin: 10px auto;
+            object-fit: contain;
         }
 
         .email-full-body a {
@@ -364,14 +371,6 @@
 
         .email-full-body a:hover {
             text-decoration: underline;
-        }
-
-        .email-viewer {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
-            margin: 20px auto;
-            max-width: 1000px;
         }
 
         .email-full-header {
@@ -463,6 +462,29 @@
         .email-count {
             color: #5f6368;
             font-size: 0.9em;
+        }
+
+        .email-content-frame {
+            width: 100%;
+            border: none;
+            overflow: hidden;
+            background: white;
+        }
+
+        .email-viewer {
+            position: relative;
+            z-index: 1;
+        }
+
+        .email-viewer-header {
+            position: relative;
+            z-index: 2;
+            background: white;
+        }
+
+        .sidebar {
+            position: relative;
+            z-index: 3;
         }
     </style>
 </head>

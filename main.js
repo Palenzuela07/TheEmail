@@ -77,7 +77,7 @@ async function listEmails(page = 1) {
             </div>
         `;
 
-        // First request to get total emails
+        // Get initial page token if needed
         if (page === 1) {
             const countResponse = await gapi.client.gmail.users.messages.list({
                 'userId': 'me',
@@ -85,10 +85,11 @@ async function listEmails(page = 1) {
                 'labelIds': ['INBOX']
             });
             totalEmails = countResponse.result.resultSizeEstimate || 0;
-            nextPageToken = countResponse.result.nextPageToken;
+            pageTokens[1] = ''; // First page has no token
+            pageTokens[2] = countResponse.result.nextPageToken; // Store token for page 2
         }
 
-        // Get emails for the requested page
+        // Get emails for current page
         const response = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
             'maxResults': EMAILS_PER_PAGE,
@@ -96,7 +97,7 @@ async function listEmails(page = 1) {
             'pageToken': page === 1 ? undefined : pageTokens[page]
         });
 
-        // Store the next page token
+        // Store next page token
         if (response.result.nextPageToken) {
             pageTokens[page + 1] = response.result.nextPageToken;
         }
@@ -376,11 +377,21 @@ async function openEmail(emailId) {
                         <div>Date: ${formatDate(new Date(date))}</div>
                     </div>
                 </div>
-                <div class="email-full-body">
-                    ${emailContent}
+                <div class="email-content-wrapper">
+                    <div class="email-full-body">
+                        ${emailContent}
+                    </div>
                 </div>
             </div>
         `;
+
+        // Add this style to force white background
+        const emailBody = document.querySelector('.email-full-body');
+        if (emailBody) {
+            emailBody.style.backgroundColor = 'white';
+            emailBody.style.position = 'relative';
+            emailBody.style.zIndex = '1';
+        }
     } catch (error) {
         console.error('Error opening email:', error);
         document.getElementById('email-viewer-content').innerHTML = `
