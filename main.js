@@ -14,6 +14,7 @@ const EMAILS_PER_PAGE = 50;
 let totalEmails = 0;
 let pageTokens = {};
 let nextPageToken = null;
+let currentEmail = null;
 
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
@@ -274,63 +275,96 @@ async function changePage(newPage) {
 
 async function openEmail(emailId) {
     try {
+        currentEmail = emailId;
+        
+        // Show loading state
+        document.getElementById('email-viewer-content').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Loading email...</p>
+            </div>
+        `;
+        
+        document.getElementById('emailList').style.display = 'none';
+        const viewer = document.getElementById('email-viewer');
+        viewer.style.display = 'block';
+
         const emailDetails = await gapi.client.gmail.users.messages.get({
             'userId': 'me',
             'id': emailId,
             'format': 'full'
         });
         
-        document.getElementById('emailList').style.display = 'none';
-        const viewer = document.getElementById('email-viewer');
-        viewer.style.display = 'block';
-        
         const headers = emailDetails.result.payload.headers;
-        const subject = decodeEmailText(headers.find(h => h.name === 'Subject')?.value);
-        const from = decodeEmailText(headers.find(h => h.name === 'From')?.value);
+        let subject = headers.find(h => h.name === 'Subject')?.value || '';
+        let from = headers.find(h => h.name === 'From')?.value || '';
         const date = headers.find(h => h.name === 'Date')?.value;
         
+        // Safer decoding
+        try {
+            subject = decodeURIComponent(escape(subject));
+            from = decodeURIComponent(escape(from));
+        } catch (e) {
+            console.log('Decode error:', e);
+            // Use original values if decoding fails
+        }
+
         let emailContent = '';
-        if (emailDetails.result.payload.parts) {
-            const htmlPart = emailDetails.result.payload.parts.find(part => 
+        const payload = emailDetails.result.payload;
+
+        // Function to decode content safely
+        const safeDecodeContent = (data) => {
+            try {
+                return decodeURIComponent(escape(atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
+            } catch (e) {
+                console.log('Content decode error:', e);
+                return atob(data.replace(/-/g, '+').replace(/_/g, '/'));
+            }
+        };
+
+        // Handle different email formats
+        if (payload.parts) {
+            // Try to find HTML part first
+            const htmlPart = payload.parts.find(part => 
                 part.mimeType === 'text/html'
             );
-            const textPart = emailDetails.result.payload.parts.find(part => 
+            
+            // Fallback to plain text
+            const textPart = payload.parts.find(part => 
                 part.mimeType === 'text/plain'
             );
             
             if (htmlPart && htmlPart.body.data) {
-                emailContent = decodeEmailText(atob(htmlPart.body.data.replace(/-/g, '+').replace(/_/g, '/')));
+                emailContent = safeDecodeContent(htmlPart.body.data);
             } else if (textPart && textPart.body.data) {
-                emailContent = decodeEmailText(atob(textPart.body.data.replace(/-/g, '+').replace(/_/g, '/')));
+                emailContent = safeDecodeContent(textPart.body.data);
                 emailContent = emailContent.replace(/\n/g, '<br>');
             }
 
-            // Handle inline images
-            if (emailDetails.result.payload.parts) {
-                for (const part of emailDetails.result.payload.parts) {
-                    if (part.mimeType && part.mimeType.startsWith('image/')) {
-                        if (part.body.attachmentId) {
-                            try {
-                                const attachment = await gapi.client.gmail.users.messages.attachments.get({
-                                    'userId': 'me',
-                                    'messageId': emailId,
-                                    'id': part.body.attachmentId
-                                });
-                                const imageData = attachment.result.data;
-                                // Replace inline image references
-                                emailContent = emailContent.replace(
-                                    new RegExp(`cid:${part.contentId || part.partId}`, 'g'),
-                                    `data:${part.mimeType};base64,${imageData}`
-                                );
-                            } catch (error) {
-                                console.error('Error loading image:', error);
-                            }
+            // Handle nested parts (multipart emails)
+            if (!emailContent) {
+                for (const part of payload.parts) {
+                    if (part.parts) {
+                        const nestedHtmlPart = part.parts.find(p => p.mimeType === 'text/html');
+                        const nestedTextPart = part.parts.find(p => p.mimeType === 'text/plain');
+                        
+                        if (nestedHtmlPart && nestedHtmlPart.body.data) {
+                            emailContent = safeDecodeContent(nestedHtmlPart.body.data);
+                            break;
+                        } else if (nestedTextPart && nestedTextPart.body.data) {
+                            emailContent = safeDecodeContent(nestedTextPart.body.data);
+                            emailContent = emailContent.replace(/\n/g, '<br>');
+                            break;
                         }
                     }
                 }
             }
-        } else if (emailDetails.result.payload.body.data) {
-            emailContent = decodeEmailText(atob(emailDetails.result.payload.body.data.replace(/-/g, '+').replace(/_/g, '/')));
+        } else if (payload.body.data) {
+            emailContent = safeDecodeContent(payload.body.data);
+        }
+
+        // If still no content, show a message
+        if (!emailContent) {
+            emailContent = '<p>No readable content found in this email.</p>';
         }
 
         document.getElementById('email-viewer-content').innerHTML = `
@@ -349,10 +383,23 @@ async function openEmail(emailId) {
         `;
     } catch (error) {
         console.error('Error opening email:', error);
+        document.getElementById('email-viewer-content').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>Error loading email. Please try again.</p>
+                <p style="font-size: 0.8em; color: #666;">Error details: ${error.message}</p>
+            </div>
+        `;
     }
 }
 
 function closeEmail() {
+    // Clear current email
+    currentEmail = null;
+    
+    // Clear content
+    document.getElementById('email-viewer-content').innerHTML = '';
+    
+    // Switch views
     document.getElementById('email-viewer').style.display = 'none';
     document.getElementById('emailList').style.display = 'block';
 }
@@ -386,5 +433,26 @@ function decodeEmailText(text) {
         console.error('Error decoding text:', error);
         return text;
     }
+}
+
+// Add this function
+function switchSection(section) {
+    if (section === 'home') {
+        document.querySelector('.nav-item.active').classList.remove('active');
+        document.querySelector('[onclick="switchSection(\'home\')"]').classList.add('active');
+    } else if (section === 'email') {
+        document.querySelector('.nav-item.active').classList.remove('active');
+        document.querySelector('[onclick="switchSection(\'email\')"]').classList.add('active');
+        const emails = listEmails();
+        displayEmails(emails);
+    }
+}
+
+function deleteEmail(emailId) {
+    console.log('Delete functionality coming soon');
+}
+
+function replyEmail(emailId) {
+    console.log('Reply functionality coming soon');
 }
  
