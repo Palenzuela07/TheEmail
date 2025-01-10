@@ -548,6 +548,39 @@
             padding: 8px 0;
             color: #202124;
         }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 10px 0;
+        }
+
+        .section-header:hover {
+            opacity: 0.8;
+        }
+
+        .toggle-icon {
+            font-size: 12px;
+            color: #5f6368;
+            transition: transform 0.3s ease;
+        }
+
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+
+        .urgent-list li, .non-urgent-list li {
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .urgent-list li:hover, .non-urgent-list li:hover {
+            background-color: #f8f9fa;
+        }
     </style>
 </head>
 <body>

@@ -535,6 +535,7 @@ async function analyzeEmails(emails) {
     try {
         // Prepare email data for analysis
         const emailData = emails.map(email => ({
+            id: email.id,
             subject: email.subject,
             from: email.from,
             snippet: email.snippet,
@@ -547,8 +548,8 @@ async function analyzeEmails(emails) {
         
         Provide a response in this JSON format:
         {
-            "urgent": [{"subject": "...", "reason": "..."}],
-            "nonUrgent": [{"subject": "...", "category": "..."}],
+            "urgent": [{"id": "...", "subject": "...", "reason": "..."}],
+            "nonUrgent": [{"id": "...", "subject": "...", "category": "..."}],
             "summary": "Brief overview of key patterns and important items",
             "actionItems": ["Action 1", "Action 2"]
         }`;
@@ -587,31 +588,41 @@ function displayHomeDashboard(analysis) {
             </div>
             
             <div class="dashboard-section">
-                <h2>⚠️ Urgent Attention</h2>
-                ${analysis.urgent.length > 0 ? `
-                    <ul class="urgent-list">
-                        ${analysis.urgent.map(item => `
-                            <li>
-                                <strong>${item.subject}</strong>
-                                <span class="reason">${item.reason}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                ` : '<p>No urgent emails</p>'}
+                <div class="section-header" onclick="toggleSection('urgent-emails')">
+                    <h2>⚠️ Urgent Attention (${analysis.urgent.length})</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div id="urgent-emails" class="collapsible-content">
+                    ${analysis.urgent.length > 0 ? `
+                        <ul class="urgent-list">
+                            ${analysis.urgent.map(item => `
+                                <li onclick="openEmailFromDashboard('${item.id}')">
+                                    <strong>${item.subject}</strong>
+                                    <span class="reason">${item.reason}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : '<p>No urgent emails</p>'}
+                </div>
             </div>
 
             <div class="dashboard-section">
-                <h2>📥 Other Emails</h2>
-                ${analysis.nonUrgent.length > 0 ? `
-                    <ul class="non-urgent-list">
-                        ${analysis.nonUrgent.map(item => `
-                            <li>
-                                <span class="category">${item.category}</span>
-                                <span class="subject">${item.subject}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                ` : '<p>No other emails</p>'}
+                <div class="section-header" onclick="toggleSection('non-urgent-emails')">
+                    <h2>📥 Other Emails (${analysis.nonUrgent.length})</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div id="non-urgent-emails" class="collapsible-content">
+                    ${analysis.nonUrgent.length > 0 ? `
+                        <ul class="non-urgent-list">
+                            ${analysis.nonUrgent.map(item => `
+                                <li onclick="openEmailFromDashboard('${item.id}')">
+                                    <span class="category">${item.category}</span>
+                                    <span class="subject">${item.subject}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    ` : '<p>No other emails</p>'}
+                </div>
             </div>
 
             <div class="dashboard-section">
@@ -626,5 +637,23 @@ function displayHomeDashboard(analysis) {
             </div>
         </div>
     `;
+}
+
+// Add these new functions
+function toggleSection(sectionId) {
+    const content = document.getElementById(sectionId);
+    const icon = content.parentElement.querySelector('.toggle-icon');
+    
+    if (content.style.maxHeight) {
+        content.style.maxHeight = null;
+        icon.textContent = '▼';
+    } else {
+        content.style.maxHeight = content.scrollHeight + "px";
+        icon.textContent = '▲';
+    }
+}
+
+function openEmailFromDashboard(emailId) {
+    openEmail(emailId);
 }
  
