@@ -6,6 +6,9 @@ const API_KEY = 'REDACTED_GOOGLE_API_KEY';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest';
 const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
 
+// Add this at the top with other constants
+const OPENAI_API_KEY = 'REDACTED_OPENAI_API_KEY';
+
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
@@ -446,15 +449,76 @@ function decodeEmailText(text) {
     }
 }
 
-// Add this function
-function switchSection(section) {
+// Update switchSection function
+async function switchSection(section) {
+    // First, close any open email
+    closeEmail();
+    
     if (section === 'home') {
         document.querySelector('.nav-item.active').classList.remove('active');
         document.querySelector('[onclick="switchSection(\'home\')"]').classList.add('active');
+        
+        // Show loading state
+        document.getElementById('emailList').style.display = 'block'; // Make sure email list is visible
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Analyzing your recent emails...</p>
+            </div>
+        `;
+
+        try {
+            // Get emails from last 7 days
+            const response = await gapi.client.gmail.users.messages.list({
+                'userId': 'me',
+                'maxResults': 50,
+                'labelIds': ['INBOX'],
+                'q': 'newer_than:7d'
+            });
+
+            if (!response.result.messages) {
+                displayHomeDashboard({ 
+                    urgent: [], 
+                    nonUrgent: [], 
+                    summary: 'No emails found in the last 7 days.',
+                    actionItems: []
+                });
+                return;
+            }
+
+            // Get full details of each email
+            const emails = await Promise.all(response.result.messages.map(async message => {
+                const emailDetails = await gapi.client.gmail.users.messages.get({
+                    'userId': 'me',
+                    'id': message.id,
+                    'format': 'full'
+                });
+                
+                const headers = emailDetails.result.payload.headers;
+                return {
+                    id: message.id,
+                    subject: headers.find(h => h.name === 'Subject')?.value || '(no subject)',
+                    from: headers.find(h => h.name === 'From')?.value || '(no sender)',
+                    date: headers.find(h => h.name === 'Date')?.value || '',
+                    snippet: emailDetails.result.snippet || ''
+                };
+            }));
+
+            // Analyze emails with OpenAI
+            const analysis = await analyzeEmails(emails);
+            displayHomeDashboard(analysis);
+
+        } catch (error) {
+            console.error('Error loading home dashboard:', error);
+            document.getElementById('emailList').innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #d93025;">
+                    <p>Error analyzing emails. Please try again.</p>
+                </div>
+            `;
+        }
     } else if (section === 'email') {
         document.querySelector('.nav-item.active').classList.remove('active');
         document.querySelector('[onclick="switchSection(\'email\')"]').classList.add('active');
-        const emails = listEmails();
+        const emails = await listEmails();
         displayEmails(emails);
     }
 }
@@ -465,5 +529,102 @@ function deleteEmail(emailId) {
 
 function replyEmail(emailId) {
     console.log('Reply functionality coming soon');
+}
+
+async function analyzeEmails(emails) {
+    try {
+        // Prepare email data for analysis
+        const emailData = emails.map(email => ({
+            subject: email.subject,
+            from: email.from,
+            snippet: email.snippet,
+            date: email.date
+        }));
+
+        // Create prompt for OpenAI
+        const prompt = `Analyze these recent emails and categorize them:
+        ${JSON.stringify(emailData)}
+        
+        Provide a response in this JSON format:
+        {
+            "urgent": [{"subject": "...", "reason": "..."}],
+            "nonUrgent": [{"subject": "...", "category": "..."}],
+            "summary": "Brief overview of key patterns and important items",
+            "actionItems": ["Action 1", "Action 2"]
+        }`;
+
+        // Call OpenAI API
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [{
+                    role: "user",
+                    content: prompt
+                }],
+                temperature: 0.7
+            })
+        });
+
+        const data = await response.json();
+        return JSON.parse(data.choices[0].message.content);
+    } catch (error) {
+        console.error('Error analyzing emails:', error);
+        throw error;
+    }
+}
+
+function displayHomeDashboard(analysis) {
+    document.getElementById('emailList').innerHTML = `
+        <div class="home-dashboard">
+            <div class="dashboard-section">
+                <h2>📊 Email Summary</h2>
+                <p>${analysis.summary}</p>
+            </div>
+            
+            <div class="dashboard-section">
+                <h2>⚠️ Urgent Attention</h2>
+                ${analysis.urgent.length > 0 ? `
+                    <ul class="urgent-list">
+                        ${analysis.urgent.map(item => `
+                            <li>
+                                <strong>${item.subject}</strong>
+                                <span class="reason">${item.reason}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                ` : '<p>No urgent emails</p>'}
+            </div>
+
+            <div class="dashboard-section">
+                <h2>📥 Other Emails</h2>
+                ${analysis.nonUrgent.length > 0 ? `
+                    <ul class="non-urgent-list">
+                        ${analysis.nonUrgent.map(item => `
+                            <li>
+                                <span class="category">${item.category}</span>
+                                <span class="subject">${item.subject}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                ` : '<p>No other emails</p>'}
+            </div>
+
+            <div class="dashboard-section">
+                <h2>✅ Suggested Actions</h2>
+                ${analysis.actionItems.length > 0 ? `
+                    <ul class="action-list">
+                        ${analysis.actionItems.map(item => `
+                            <li>${item}</li>
+                        `).join('')}
+                    </ul>
+                ` : '<p>No action items</p>'}
+            </div>
+        </div>
+    `;
 }
  
