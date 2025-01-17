@@ -652,6 +652,58 @@
             background: #fce8e6;
             border-color: #d93025;
         }
+
+        .email-tabs {
+            max-width: 1000px;
+            margin: 0 auto 0;
+            display: flex;
+            border-bottom: 1px solid #dadce0;
+            background: white;
+            border-radius: 16px 16px 0 0;
+        }
+
+        .email-tab {
+            padding: 16px 32px;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        .email-tab.active {
+            color: #1a73e8;
+            font-weight: 500;
+        }
+
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #1a73e8;
+        }
+
+        .tab-icon {
+            font-size: 16px;
+        }
+
+        /* Update email list style to remove top radius */
+        .email-list {
+            border-radius: 0 0 16px 16px;
+            margin-top: 0;
+        }
     </style>
 </head>
 <body>
@@ -676,6 +728,24 @@
                         <span id="user-greeting"></span>
                         <button class="signout-btn" onclick="handleSignOut()">Sign Out</button>
                     </div>
+                </div>
+                <div class="email-tabs">
+                    <button class="email-tab active" onclick="switchTab('primary')">
+                        <span class="tab-icon">📥</span>
+                        Primary
+                    </button>
+                    <button class="email-tab" onclick="switchTab('promotions')">
+                        <span class="tab-icon">🏷️</span>
+                        Promotions
+                    </button>
+                    <button class="email-tab" onclick="switchTab('social')">
+                        <span class="tab-icon">👥</span>
+                        Social
+                    </button>
+                    <button class="email-tab" onclick="switchTab('updates')">
+                        <span class="tab-icon">🔄</span>
+                        Updates
+                    </button>
                 </div>
                 <div id="emailList" class="email-list">
                     <!-- Emails will be inserted here -->

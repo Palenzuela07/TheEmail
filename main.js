@@ -98,11 +98,15 @@ async function listEmails(page = 1) {
             const countResponse = await gapi.client.gmail.users.messages.list({
                 'userId': 'me',
                 'maxResults': 500,
-                'labelIds': ['INBOX']
+                'labelIds': ['INBOX'],
+                'orderBy': 'date'
             });
             totalEmails = countResponse.result.resultSizeEstimate || 0;
-            pageTokens[1] = ''; // First page has no token
-            pageTokens[2] = countResponse.result.nextPageToken; // Store token for page 2
+            pageTokens = {};
+            pageTokens[1] = '';
+            if (countResponse.result.nextPageToken) {
+                pageTokens[2] = countResponse.result.nextPageToken;
+            }
         }
 
         // Get emails for current page
@@ -110,7 +114,8 @@ async function listEmails(page = 1) {
             'userId': 'me',
             'maxResults': EMAILS_PER_PAGE,
             'labelIds': ['INBOX'],
-            'pageToken': page === 1 ? undefined : pageTokens[page]
+            'pageToken': page === 1 ? undefined : pageTokens[page],
+            'orderBy': 'date'
         });
 
         // Store next page token
@@ -140,7 +145,9 @@ async function listEmails(page = 1) {
             };
         }));
         
-        return emails;
+        // Sort emails by date before returning
+        return emails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
     } catch (error) {
         console.error('Error fetching emails:', error);
         document.getElementById('emailList').innerHTML = `
@@ -661,5 +668,93 @@ function toggleSection(sectionId) {
 
 function openEmailFromDashboard(emailId) {
     openEmail(emailId);
+}
+
+async function switchTab(tabName) {
+    console.log('Switching to tab:', tabName);
+
+    // Update active tab
+    document.querySelectorAll('.email-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`.email-tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
+
+    // Show loading state
+    document.getElementById('emailList').innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <p>Loading ${tabName} emails...</p>
+        </div>
+    `;
+
+    try {
+        // Reset pagination
+        currentPage = 1;
+        pageTokens = {};
+
+        let query;
+        switch(tabName) {
+            case 'updates':
+                query = 'in:inbox category:updates';
+                break;
+            case 'social':
+                query = 'in:inbox category:social';
+                break;
+            case 'promotions':
+                query = 'in:inbox category:promotions';
+                break;
+            case 'primary':
+            default:
+                query = 'in:inbox category:primary';
+                break;
+        }
+
+        console.log('Using query:', query);
+
+        const response = await gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': EMAILS_PER_PAGE,
+            'q': query,
+            'orderBy': 'date'
+        });
+
+        if (!response.result.messages) {
+            document.getElementById('emailList').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <p>No emails in ${tabName}</p>
+                </div>
+            `;
+            return;
+        }
+
+        const emails = await Promise.all(response.result.messages.map(async message => {
+            const emailDetails = await gapi.client.gmail.users.messages.get({
+                'userId': 'me',
+                'id': message.id,
+                'format': 'metadata',
+                'metadataHeaders': ['Subject', 'From', 'Date']
+            });
+            
+            const headers = emailDetails.result.payload.headers;
+            return {
+                id: message.id,
+                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
+                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
+                date: headers.find(header => header.name === 'Date')?.value || '',
+                snippet: emailDetails.result.snippet || 'No preview available'
+            };
+        }));
+
+        const sortedEmails = emails.sort((a, b) => new Date(b.date) - new Date(a.date));
+        displayEmails(sortedEmails);
+
+    } catch (error) {
+        console.error('Error switching tab:', error);
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>Error loading ${tabName} emails. Please try again.</p>
+                <p style="font-size: 0.8em; color: #666;">${error.message}</p>
+            </div>
+        `;
+    }
 }
  
