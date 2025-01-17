@@ -61,8 +61,21 @@ async function handleAuthResponse(response) {
         return;
     }
     
-    document.querySelector('.welcome-text').textContent = 'Loading your emails...';
     try {
+        const profile = await gapi.client.gmail.users.getProfile({
+            'userId': 'me'
+        });
+        
+        userEmail = profile.result.emailAddress;
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('userEmail', userEmail);
+        
+        // Update the greeting with the user's email
+        document.getElementById('user-greeting').textContent = `Hi, ${userEmail}`;
+        
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        
         const emails = await listEmails();
         displayEmails(emails);
     } catch (error) {
@@ -279,8 +292,6 @@ async function changePage(newPage) {
 
 async function openEmail(emailId) {
     try {
-        currentEmail = emailId;
-        
         // Show loading state
         document.getElementById('email-viewer-content').innerHTML = `
             <div style="text-align: center; padding: 20px;">
@@ -288,10 +299,11 @@ async function openEmail(emailId) {
             </div>
         `;
         
+        document.getElementById('email-viewer').style.display = 'block';
         document.getElementById('emailList').style.display = 'none';
-        const viewer = document.getElementById('email-viewer');
-        viewer.style.display = 'block';
 
+        currentEmail = emailId;
+        
         const emailDetails = await gapi.client.gmail.users.messages.get({
             'userId': 'me',
             'id': emailId,
@@ -407,15 +419,9 @@ async function openEmail(emailId) {
 }
 
 function closeEmail() {
-    // Clear current email
-    currentEmail = null;
-    
-    // Clear content
-    document.getElementById('email-viewer-content').innerHTML = '';
-    
-    // Switch views
     document.getElementById('email-viewer').style.display = 'none';
     document.getElementById('emailList').style.display = 'block';
+    document.getElementById('email-viewer-content').innerHTML = ''; // Clear content
 }
 
 // Add this helper function to properly decode email text

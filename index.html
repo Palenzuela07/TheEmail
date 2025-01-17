@@ -7,9 +7,12 @@
     <meta name="referrer" content="no-referrer-when-downgrade">
     <meta http-equiv="Cross-Origin-Opener-Policy" content="unsafe-none">
     <meta http-equiv="Cross-Origin-Embedder-Policy" content="unsafe-none">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async></script>
-    <script src="main.js" defer></script>
+    <script src="main.js?v=${Date.now()}" defer></script>
     <style>
         /* Login page styles */
         #login-container {
@@ -75,8 +78,8 @@
 
         .email-item {
             display: flex;
-            align-items: center;
-            padding: 16px;
+            align-items: flex-start;
+            padding: 12px 16px;
             border-bottom: 1px solid #eceff1;
             cursor: pointer;
             background: white;
@@ -99,15 +102,19 @@
         .email-content {
             flex-grow: 1;
             min-width: 0;
+            line-height: 1.4;
         }
 
         .email-sender {
             font-weight: bold;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .email-subject {
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -119,6 +126,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            margin: 0;
         }
 
         .email-date {
@@ -280,7 +288,8 @@
         }
 
         .email-viewer {
-            background: white;
+            background: white !important;
+            color: #202124 !important;
             max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
@@ -318,18 +327,22 @@
 
         .email-content-wrapper {
             position: relative;
+            background: white !important;
+            color: #202124 !important;
+            z-index: 1;
+            isolation: isolate; /* Creates a new stacking context */
             max-width: 100%;
             overflow: auto;
-            background: white;
             width: 100%;
             contain: content;
         }
 
         .email-full-body {
+            background: white !important;
+            color: #202124 !important;
+            font-family: Roboto, RobotoDraft, Helvetica, Arial, sans-serif !important;
             line-height: 1.6;
-            color: #202124;
             padding: 20px;
-            background: white;
             overflow-x: auto;
             max-width: 100%;
             width: 100%;
@@ -337,6 +350,8 @@
         }
 
         .email-full-body * {
+            background: white !important;
+            color: inherit !important;
             max-width: 100% !important;
             box-sizing: border-box;
         }
@@ -581,6 +596,55 @@
         .urgent-list li:hover, .non-urgent-list li:hover {
             background-color: #f8f9fa;
         }
+
+        /* Handle specific dark mode overrides */
+        .email-full-body [style*="background-color"],
+        .email-full-body [bgcolor] {
+            background-color: white !important;
+        }
+
+        .email-full-body [style*="color: rgb(0, 0, 0)"],
+        .email-full-body [style*="color: black"],
+        .email-full-body [style*="color:#000000"],
+        .email-full-body [style*="color: #000"] {
+            color: #202124 !important;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 16px;
+            background: white;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        #user-greeting {
+            color: #202124;
+            font-size: 14px;
+        }
+
+        .signout-btn {
+            background: #fff;
+            border: 1px solid #dadce0;
+            padding: 8px 16px;
+            border-radius: 4px;
+            color: #d93025;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .signout-btn:hover {
+            background: #fce8e6;
+            border-color: #d93025;
+        }
     </style>
 </head>
 <body>
@@ -598,9 +662,14 @@
                         <span class="nav-text">Email</span>
                     </div>
                 </div>
-                <button class="signout-btn" onclick="handleSignOut()">Sign Out</button>
             </div>
             <div class="main-content">
+                <div class="top-bar">
+                    <div class="user-info">
+                        <span id="user-greeting"></span>
+                        <button class="signout-btn" onclick="handleSignOut()">Sign Out</button>
+                    </div>
+                </div>
                 <div id="emailList" class="email-list">
                     <!-- Emails will be inserted here -->
                 </div>
