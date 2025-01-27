@@ -4,7 +4,7 @@ const API_KEY = 'REDACTED_GOOGLE_API_KEY';
 
 // Discovery doc URL for APIs used by the quickstart
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest';
-const SCOPES = 'https://www.googleapis.com/auth/gmail.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose';
 
 // Add this at the top with other constants
 const OPENAI_API_KEY = 'REDACTED_OPENAI_API_KEY';
@@ -488,116 +488,80 @@ function deleteEmail(emailId) {
 }
 
 function replyEmail(emailId) {
-    console.log('Reply functionality coming soon');
-}
+    const emailContent = document.querySelector('.email-full-content');
+    if (!emailContent) return;
 
-async function analyzeEmails(emails) {
-    try {
-        // Prepare email data for analysis
-        const emailData = emails.map(email => ({
-            id: email.id,
-            subject: email.subject,
-            from: email.from,
-            snippet: email.snippet,
-            date: email.date
-        }));
-
-        // Create prompt for OpenAI
-        const prompt = `Analyze these recent emails and categorize them:
-        ${JSON.stringify(emailData)}
-        
-        Provide a response in this JSON format:
-        {
-            "urgent": [{"id": "...", "subject": "...", "reason": "..."}],
-            "nonUrgent": [{"id": "...", "subject": "...", "category": "..."}],
-            "summary": "Brief overview of key patterns and important items",
-            "actionItems": ["Action 1", "Action 2"]
-        }`;
-
-        // Call OpenAI API
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [{
-                    role: "user",
-                    content: prompt
-                }],
-                temperature: 0.7
-            })
-        });
-
-        const data = await response.json();
-        return JSON.parse(data.choices[0].message.content);
-    } catch (error) {
-        console.error('Error analyzing emails:', error);
-        throw error;
-    }
+    // Extract email from the "From" field
+    const fromText = emailContent.querySelector('.email-full-metadata div:first-child').textContent;
+    const emailMatch = fromText.match(/<(.+?)>/) || fromText.match(/[\w.-]+@[\w.-]+\.\w+/);
+    const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
+    
+    const subject = emailContent.querySelector('.email-full-subject').textContent;
+    const originalBody = emailContent.querySelector('.email-full-body').innerHTML;
+    
+    // Format the reply body with the original message
+    const replyBody = `\n\n\n------ Original Message ------\nFrom: ${fromText}\nSubject: ${subject}\n\n${originalBody}`;
+    
+    // Open compose modal with reply details
+    openComposeModal({
+        from: replyToEmail,
+        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+        body: replyBody
+    });
 }
 
 function displayHomeDashboard(analysis) {
     document.getElementById('emailList').innerHTML = `
         <div class="home-dashboard">
             <div class="dashboard-section">
-                <h2>📊 Email Summary</h2>
-                <ul class="summary-list">
-                    ${analysis.summary.map(point => `
-                        <li>${point}</li>
-                    `).join('')}
-                </ul>
-            </div>
-            
-            <div class="dashboard-section">
-                <div class="section-header" onclick="toggleSection('urgent-emails')">
-                    <h2>⚠️ Urgent Attention (${analysis.urgent.length})</h2>
+                <div class="section-header" onclick="toggleSection('action-needed')">
+                    <h2>🎯 Action Needed <span class="count">(${analysis.actionNeeded.length})</span></h2>
                     <span class="toggle-icon">▼</span>
                 </div>
-                <div id="urgent-emails" class="collapsible-content">
-                    ${analysis.urgent.length > 0 ? `
-                        <ul class="urgent-list">
-                            ${analysis.urgent.map(item => `
-                                <li onclick="openEmailFromDashboard('${item.id}')">
-                                    <strong>${item.subject}</strong>
-                                    <span class="reason">${item.reason}</span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    ` : '<p>No urgent emails</p>'}
-                </div>
-            </div>
-
-            <div class="dashboard-section">
-                <div class="section-header" onclick="toggleSection('non-urgent-emails')">
-                    <h2>📥 Other Emails (${analysis.nonUrgent.length})</h2>
-                    <span class="toggle-icon">▼</span>
-                </div>
-                <div id="non-urgent-emails" class="collapsible-content">
-                    ${analysis.nonUrgent.length > 0 ? `
-                        <ul class="non-urgent-list">
-                            ${analysis.nonUrgent.map(item => `
-                                <li onclick="openEmailFromDashboard('${item.id}')">
-                                    <span class="category">${item.category}</span>
-                                    <span class="subject">${item.subject}</span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    ` : '<p>No other emails</p>'}
-                </div>
-            </div>
-
-            <div class="dashboard-section">
-                <h2>✅ Suggested Actions</h2>
-                ${analysis.actionItems.length > 0 ? `
-                    <ul class="action-list">
-                        ${analysis.actionItems.map(item => `
-                            <li>${item}</li>
+                <div id="action-needed" class="collapsible-content">
+                    <ul class="urgent-list">
+                        ${analysis.actionNeeded.map(item => `
+                            <li onclick="openEmailFromDashboard('${item.id}')">
+                                <strong>${item.subject}</strong>
+                                <span class="reason">${item.category}</span>
+                            </li>
                         `).join('')}
                     </ul>
-                ` : '<p>No action items</p>'}
+                </div>
+            </div>
+
+            <div class="dashboard-section">
+                <div class="section-header" onclick="toggleSection('awaiting-response')">
+                    <h2>⏳ Awaiting Response <span class="count">(${analysis.awaitingResponse.length})</span></h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div id="awaiting-response" class="collapsible-content">
+                    <ul class="non-urgent-list">
+                        ${analysis.awaitingResponse.map(item => `
+                            <li onclick="openEmailFromDashboard('${item.id}')">
+                                <span class="category">${item.category}</span>
+                                <span class="subject">${item.subject}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="dashboard-section">
+                <div class="section-header" onclick="toggleSection('to-review')">
+                    <h2>📋 To Review <span class="count">(${analysis.toReview.length})</span></h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div id="to-review" class="collapsible-content">
+                    <ul class="non-urgent-list">
+                        ${analysis.toReview.map(item => `
+                            <li onclick="openEmailFromDashboard('${item.id}')">
+                                <span class="category">${item.category}</span>
+                                <span class="subject">${item.subject}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
             </div>
         </div>
     `;
@@ -645,7 +609,8 @@ async function switchTab(tabName) {
         let query;
         switch(tabName) {
             case 'updates':
-                query = 'in:inbox category:updates';
+                // Look for typical update-type emails
+                query = 'in:inbox (subject:"notification" OR subject:"update" OR subject:"receipt" OR subject:"confirmation" OR from:no-reply OR from:noreply)';
                 break;
             case 'social':
                 query = 'in:inbox category:social';
@@ -655,7 +620,8 @@ async function switchTab(tabName) {
                 break;
             case 'primary':
             default:
-                query = 'in:inbox category:primary';
+                // Exclude updates, social, and promotions
+                query = 'in:inbox -category:social -category:promotions -subject:notification -subject:update -subject:receipt -subject:confirmation -from:no-reply -from:noreply';
                 break;
         }
 
@@ -664,8 +630,7 @@ async function switchTab(tabName) {
         const response = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
             'maxResults': EMAILS_PER_PAGE,
-            'q': query,
-            'orderBy': 'date'
+            'q': query
         });
 
         if (!response.result.messages) {
@@ -718,14 +683,15 @@ async function loadHomeDashboard() {
             </div>
         `;
 
-        // Get recent emails for analysis
-        const response = await gapi.client.gmail.users.messages.list({
+        // Get recent emails
+        const emailsResponse = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
-            'maxResults': 20,  // Limit to 20 recent emails
-            'labelIds': ['INBOX']
+            'maxResults': 50,
+            'labelIds': ['INBOX'],
+            'q': 'in:inbox newer_than:7d'
         });
 
-        if (!response.result.messages) {
+        if (!emailsResponse.result.messages) {
             document.getElementById('emailList').innerHTML = `
                 <div style="text-align: center; padding: 20px;">
                     <p>No emails found to analyze.</p>
@@ -735,12 +701,12 @@ async function loadHomeDashboard() {
         }
 
         // Get details for each email
-        const emails = await Promise.all(response.result.messages.map(async message => {
+        const emails = await Promise.all(emailsResponse.result.messages.map(async message => {
             const emailDetails = await gapi.client.gmail.users.messages.get({
                 'userId': 'me',
                 'id': message.id,
                 'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
+                'metadataHeaders': ['Subject', 'From', 'Date', 'Importance']
             });
             
             const headers = emailDetails.result.payload.headers;
@@ -748,35 +714,61 @@ async function loadHomeDashboard() {
                 id: message.id,
                 subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
                 from: headers.find(header => header.name === 'From')?.value || '',
-                date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || ''
+                snippet: emailDetails.result.snippet || '',
+                importance: headers.find(h => h.name === 'Importance')?.value || ''
             };
         }));
 
-        // Create analysis object
+        // Categorize emails based on simple rules
         const analysis = {
-            summary: [
-                "You have 5 unread emails",
-                "Most active sender is newsletters@example.com",
-                "3 emails require immediate attention",
-                "2 upcoming calendar events found"
-            ],
-            urgent: emails.slice(0, 3).map(email => ({
-                id: email.id,
-                subject: email.subject,
-                reason: "Time-sensitive content"
-            })),
-            nonUrgent: emails.slice(3, 8).map(email => ({
-                id: email.id,
-                subject: email.subject,
-                category: "Newsletter"
-            })),
-            actionItems: [
-                "Reply to urgent emails",
-                "Review newsletter subscriptions",
-                "Check calendar events"
-            ]
+            actionNeeded: [],
+            awaitingResponse: [],
+            toReview: []
         };
+
+        emails.forEach(email => {
+            const subjectLower = email.subject.toLowerCase();
+            const snippetLower = email.snippet.toLowerCase();
+            const fromLower = email.from.toLowerCase();
+
+            // Action Needed
+            if (
+                email.importance === 'high' ||
+                subjectLower.includes('urgent') ||
+                subjectLower.includes('asap') ||
+                subjectLower.includes('deadline') ||
+                subjectLower.includes('action required') ||
+                snippetLower.includes('please respond')
+            ) {
+                analysis.actionNeeded.push({
+                    id: email.id,
+                    subject: email.subject,
+                    category: 'Urgent'
+                });
+            }
+            // Awaiting Response
+            else if (
+                snippetLower.includes('please review') ||
+                snippetLower.includes('let me know') ||
+                snippetLower.includes('what do you think') ||
+                snippetLower.includes('your feedback') ||
+                snippetLower.includes('your thoughts')
+            ) {
+                analysis.awaitingResponse.push({
+                    id: email.id,
+                    subject: email.subject,
+                    category: 'Needs Response'
+                });
+            }
+            // To Review
+            else {
+                analysis.toReview.push({
+                    id: email.id,
+                    subject: email.subject,
+                    category: 'Review'
+                });
+            }
+        });
 
         // Display the dashboard
         displayHomeDashboard(analysis);
@@ -789,6 +781,101 @@ async function loadHomeDashboard() {
                 <p style="font-size: 0.8em; color: #666;">${error.message}</p>
             </div>
         `;
+    }
+}
+
+function openComposeModal(replyTo = null) {
+    const modal = document.getElementById('compose-modal');
+    const toField = document.getElementById('compose-to');
+    const subjectField = document.getElementById('compose-subject');
+    const bodyField = document.getElementById('compose-body');
+    
+    if (replyTo) {
+        toField.value = replyTo.from;
+        subjectField.value = replyTo.subject;
+        bodyField.value = replyTo.body || '';
+    } else {
+        toField.value = '';
+        subjectField.value = '';
+        bodyField.value = '';
+    }
+    
+    modal.style.display = 'block';
+    // Add show class after a small delay to trigger animation
+    setTimeout(() => modal.classList.add('show'), 10);
+}
+
+function closeComposeModal() {
+    const modal = document.getElementById('compose-modal');
+    modal.classList.remove('show');
+    // Wait for animation to finish before hiding
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+async function sendEmail() {
+    try {
+        const to = document.getElementById('compose-to').value;
+        const subject = document.getElementById('compose-subject').value;
+        const body = document.getElementById('compose-body').value;
+
+        if (!to || !subject || !body) {
+            alert('Please fill in all fields');
+            return;
+        }
+
+        console.log('Sending email to:', to);
+        console.log('Subject:', subject);
+
+        // Create email content
+        const emailContent = [
+            `From: ${userEmail}`,
+            `To: ${to}`,
+            'Content-Type: text/plain; charset=utf-8',
+            'MIME-Version: 1.0',
+            `Subject: ${subject}`,
+            '',
+            body
+        ].join('\r\n');
+
+        console.log('Email content:', emailContent);
+
+        // Base64 encode the email
+        const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        console.log('Making API call...');
+
+        const response = await gapi.client.gmail.users.messages.send({
+            'userId': 'me',
+            'resource': {
+                'raw': encodedEmail
+            }
+        });
+
+        console.log('API Response:', response);
+
+        closeComposeModal();
+        alert('Email sent successfully!');
+
+    } catch (error) {
+        console.error('Detailed error:', error);
+        alert(`Error sending email: ${error.message || 'Unknown error'}`);
+    }
+}
+
+// Update the compose button click handler
+document.querySelector('.compose-btn').onclick = () => openComposeModal();
+
+async function refreshEmails() {
+    const activeTab = document.querySelector('.email-tab.active');
+    if (activeTab) {
+        const tabName = activeTab.textContent.trim().toLowerCase();
+        await switchTab(tabName);
+    } else {
+        const emails = await listEmails();
+        displayEmails(emails);
     }
 }
  
