@@ -487,27 +487,29 @@ function deleteEmail(emailId) {
     console.log('Delete functionality coming soon');
 }
 
-function replyEmail(emailId) {
+async function replyEmail(emailId) {
     const emailContent = document.querySelector('.email-full-content');
     if (!emailContent) return;
 
-    // Extract email from the "From" field
+    // Extract email details
     const fromText = emailContent.querySelector('.email-full-metadata div:first-child').textContent;
     const emailMatch = fromText.match(/<(.+?)>/) || fromText.match(/[\w.-]+@[\w.-]+\.\w+/);
     const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
     
     const subject = emailContent.querySelector('.email-full-subject').textContent;
     const originalBody = emailContent.querySelector('.email-full-body').innerHTML;
-    
-    // Format the reply body with the original message
-    const replyBody = `\n\n\n------ Original Message ------\nFrom: ${fromText}\nSubject: ${subject}\n\n${originalBody}`;
-    
+
     // Open compose modal with reply details
     openComposeModal({
         from: replyToEmail,
         subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-        body: replyBody
+        originalContent: originalBody
     });
+}
+
+function useAISuggestion(suggestionNum) {
+    const suggestion = document.getElementById(`ai-suggestion-${suggestionNum}`).textContent;
+    document.getElementById('compose-body').value = suggestion;
 }
 
 function displayHomeDashboard(analysis) {
@@ -789,19 +791,25 @@ function openComposeModal(replyTo = null) {
     const toField = document.getElementById('compose-to');
     const subjectField = document.getElementById('compose-subject');
     const bodyField = document.getElementById('compose-body');
+    const modalTitle = modal.querySelector('.modal-header h2');
     
     if (replyTo) {
+        modalTitle.textContent = 'Reply';
         toField.value = replyTo.from;
         subjectField.value = replyTo.subject;
-        bodyField.value = replyTo.body || '';
+        
+        // For replies, pre-fill AI prompt with context
+        document.getElementById('ai-prompt').value = 
+            `Help me write a response to this email:\n\n${replyTo.originalContent}`;
     } else {
+        modalTitle.textContent = 'New Message';
         toField.value = '';
         subjectField.value = '';
         bodyField.value = '';
+        document.getElementById('ai-prompt').value = '';
     }
     
     modal.style.display = 'block';
-    // Add show class after a small delay to trigger animation
     setTimeout(() => modal.classList.add('show'), 10);
 }
 
@@ -876,6 +884,102 @@ async function refreshEmails() {
     } else {
         const emails = await listEmails();
         displayEmails(emails);
+    }
+}
+
+// Add this new function for AI help with new messages
+async function checkForAIHelp() {
+    const bodyField = document.getElementById('compose-body');
+    const text = bodyField.value;
+    
+    if (text.toLowerCase().startsWith('help:')) {
+        const prompt = text.substring(5).trim();
+        const aiSection = document.querySelector('.ai-suggestions');
+        
+        aiSection.innerHTML = `
+            <h3>AI Suggestions</h3>
+            <div class="suggestion-box" onclick="useAISuggestion(1)">
+                <h4>Suggestion</h4>
+                <div id="ai-suggestion-1">Generating...</div>
+            </div>
+        `;
+        
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-3.5-turbo",
+                    messages: [{
+                        role: "user",
+                        content: `Help me write an email: ${prompt}`
+                    }],
+                    temperature: 0.7
+                })
+            });
+
+            const data = await response.json();
+            document.getElementById('ai-suggestion-1').textContent = 
+                data.choices[0].message.content;
+        } catch (error) {
+            console.error('Error getting AI help:', error);
+            document.getElementById('ai-suggestion-1').textContent = 
+                'Error generating suggestion. Please try again.';
+        }
+    }
+}
+
+// Add event listener for AI help
+document.getElementById('compose-body').addEventListener('input', debounce(checkForAIHelp, 1000));
+
+// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+async function generateAIEmail() {
+    const prompt = document.getElementById('ai-prompt').value;
+    if (!prompt) {
+        alert('Please describe the email you want to write');
+        return;
+    }
+
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [{
+                    role: "system",
+                    content: "Only generate the email body content. Do not include any subject lines, greetings, or signatures."
+                }, {
+                    role: "user",
+                    content: prompt
+                }],
+                temperature: 0.7
+            })
+        });
+
+        const data = await response.json();
+        document.getElementById('compose-body').value = data.choices[0].message.content;
+    } catch (error) {
+        console.error('Error generating email:', error);
+        alert('Error generating email. Please try again.');
     }
 }
  

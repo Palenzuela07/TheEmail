@@ -869,6 +869,74 @@
         .refresh-btn:active .refresh-icon {
             transform: rotate(180deg);
         }
+
+        .compose-split-view {
+            display: flex;
+            gap: 16px;
+            height: 100%;
+        }
+
+        .ai-suggestions {
+            flex: 1;
+            border-right: 1px solid #dadce0;
+            padding-right: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .compose-area {
+            flex: 1;
+        }
+
+        .suggestion-box {
+            padding: 12px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: box-shadow 0.2s;
+        }
+
+        .suggestion-box:hover {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .suggestion-box h4 {
+            margin: 0 0 8px 0;
+            color: #1a73e8;
+        }
+
+        #compose-body {
+            height: 100%;
+        }
+
+        .modal {
+            width: 800px;
+            height: 600px;
+        }
+
+        #ai-prompt {
+            height: 120px;
+            resize: none;
+            padding: 8px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .ai-generate-btn {
+            padding: 8px 16px;
+            background: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .ai-generate-btn:hover {
+            background: #1557b0;
+        }
     </style>
 </head>
 <body>
@@ -941,7 +1009,7 @@
             Sign in with Google
         </button>
     </div>
-    <div id="compose-modal" class="modal" style="display: none;">
+    <div id="compose-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h2>New Message</h2>
@@ -950,7 +1018,17 @@
             <div class="modal-body">
                 <input type="text" id="compose-to" placeholder="To">
                 <input type="text" id="compose-subject" placeholder="Subject">
-                <textarea id="compose-body" placeholder="Write your message here..."></textarea>
+                <div class="compose-split-view">
+                    <div class="ai-suggestions">
+                        <h3>AI Assistant</h3>
+                        <textarea id="ai-prompt" 
+                            placeholder="What can I help you write?"></textarea>
+                        <button onclick="generateAIEmail()" class="ai-generate-btn">Generate Email</button>
+                    </div>
+                    <div class="compose-area">
+                        <textarea id="compose-body" placeholder="Write your message here..."></textarea>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button onclick="sendEmail()">Send</button>
