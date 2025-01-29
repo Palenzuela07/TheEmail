@@ -497,13 +497,22 @@ async function replyEmail(emailId) {
     const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
     
     const subject = emailContent.querySelector('.email-full-subject').textContent;
-    const originalBody = emailContent.querySelector('.email-full-body').innerHTML;
+    
+    // Get clean text content without HTML
+    const originalBody = emailContent.querySelector('.email-full-body').textContent.trim();
+
+    // Create a clean prompt for AI
+    const cleanPrompt = `Help me write a response to this email:
+
+From: ${fromText}
+Subject: ${subject}
+Content: ${originalBody}`;
 
     // Open compose modal with reply details
     openComposeModal({
         from: replyToEmail,
         subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-        originalContent: originalBody
+        originalContent: cleanPrompt
     });
 }
 
@@ -797,6 +806,7 @@ function openComposeModal(replyTo = null) {
         modalTitle.textContent = 'Reply';
         toField.value = replyTo.from;
         subjectField.value = replyTo.subject;
+        bodyField.value = ''; // Keep the compose body empty for replies
         
         // For replies, pre-fill AI prompt with context
         document.getElementById('ai-prompt').value = 
