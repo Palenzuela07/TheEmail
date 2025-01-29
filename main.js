@@ -299,129 +299,72 @@ async function changePage(newPage) {
 
 async function openEmail(emailId) {
     try {
-        // Show loading state
-        document.getElementById('email-viewer-content').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p>Loading email...</p>
-            </div>
-        `;
-        
-        document.getElementById('email-viewer').style.display = 'block';
-        document.getElementById('emailList').style.display = 'none';
-
         currentEmail = emailId;
         
-        const emailDetails = await gapi.client.gmail.users.messages.get({
+        // Get full email content
+        const response = await gapi.client.gmail.users.messages.get({
             'userId': 'me',
             'id': emailId,
             'format': 'full'
         });
+
+        const email = response.result;
+        const headers = email.payload.headers;
         
-        const headers = emailDetails.result.payload.headers;
-        let subject = headers.find(h => h.name === 'Subject')?.value || '';
-        let from = headers.find(h => h.name === 'From')?.value || '';
-        const date = headers.find(h => h.name === 'Date')?.value;
+        // Extract email metadata
+        const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
+        const from = headers.find(header => header.name === 'From')?.value || '';
+        const date = headers.find(header => header.name === 'Date')?.value || '';
+
+        // Get email body content
+        let content = '';
         
-        // Safer decoding
-        try {
-            subject = decodeURIComponent(escape(subject));
-            from = decodeURIComponent(escape(from));
-        } catch (e) {
-            console.log('Decode error:', e);
-            // Use original values if decoding fails
-        }
-
-        let emailContent = '';
-        const payload = emailDetails.result.payload;
-
-        // Function to decode content safely
-        const safeDecodeContent = (data) => {
-            try {
-                return decodeURIComponent(escape(atob(data.replace(/-/g, '+').replace(/_/g, '/'))));
-            } catch (e) {
-                console.log('Content decode error:', e);
-                return atob(data.replace(/-/g, '+').replace(/_/g, '/'));
-            }
-        };
-
-        // Handle different email formats
-        if (payload.parts) {
-            // Try to find HTML part first
-            const htmlPart = payload.parts.find(part => 
-                part.mimeType === 'text/html'
-            );
-            
-            // Fallback to plain text
-            const textPart = payload.parts.find(part => 
-                part.mimeType === 'text/plain'
-            );
-            
-            if (htmlPart && htmlPart.body.data) {
-                emailContent = safeDecodeContent(htmlPart.body.data);
-            } else if (textPart && textPart.body.data) {
-                emailContent = safeDecodeContent(textPart.body.data);
-                emailContent = emailContent.replace(/\n/g, '<br>');
-            }
-
-            // Handle nested parts (multipart emails)
-            if (!emailContent) {
-                for (const part of payload.parts) {
+        function getBody(payload) {
+            if (payload.parts) {
+                // Handle multipart message
+                for (let part of payload.parts) {
+                    if (part.mimeType === 'text/html') {
+                        return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                    }
+                    if (part.mimeType === 'text/plain' && !content) {
+                        content = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                    }
                     if (part.parts) {
-                        const nestedHtmlPart = part.parts.find(p => p.mimeType === 'text/html');
-                        const nestedTextPart = part.parts.find(p => p.mimeType === 'text/plain');
-                        
-                        if (nestedHtmlPart && nestedHtmlPart.body.data) {
-                            emailContent = safeDecodeContent(nestedHtmlPart.body.data);
-                            break;
-                        } else if (nestedTextPart && nestedTextPart.body.data) {
-                            emailContent = safeDecodeContent(nestedTextPart.body.data);
-                            emailContent = emailContent.replace(/\n/g, '<br>');
-                            break;
-                        }
+                        const nestedContent = getBody(part);
+                        if (nestedContent) return nestedContent;
                     }
                 }
+                return content;
+            } else if (payload.body.data) {
+                // Handle single part message
+                return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
             }
-        } else if (payload.body.data) {
-            emailContent = safeDecodeContent(payload.body.data);
+            return '';
         }
 
-        // If still no content, show a message
-        if (!emailContent) {
-            emailContent = '<p>No readable content found in this email.</p>';
-        }
+        content = getBody(email.payload);
 
-        document.getElementById('email-viewer-content').innerHTML = `
-            <div class="email-full-content">
-                <div class="email-full-header">
-                    <div class="email-full-subject">${subject}</div>
-                    <div class="email-full-metadata">
-                        <div>From: ${formatSender(from)}</div>
-                        <div>Date: ${formatDate(new Date(date))}</div>
-                    </div>
-                </div>
-                <div class="email-content-wrapper">
-                    <div class="email-full-body">
-                        ${emailContent}
-                    </div>
+        // Display the email
+        const emailViewer = document.getElementById('email-viewer');
+        const emailContent = document.getElementById('email-viewer-content');
+        
+        emailContent.innerHTML = `
+            <div class="email-full-header">
+                <h1 class="email-full-subject">${subject}</h1>
+                <div class="email-full-metadata">
+                    <div>From: ${from}</div>
+                    <div>Date: ${formatDate(new Date(date))}</div>
                 </div>
             </div>
+            <div class="email-full-body">${content}</div>
         `;
 
-        // Add this style to force white background
-        const emailBody = document.querySelector('.email-full-body');
-        if (emailBody) {
-            emailBody.style.backgroundColor = 'white';
-            emailBody.style.position = 'relative';
-            emailBody.style.zIndex = '1';
-        }
+        emailViewer.style.display = 'block';
+        document.getElementById('emailList').style.display = 'none';
+
     } catch (error) {
         console.error('Error opening email:', error);
-        document.getElementById('email-viewer-content').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error loading email. Please try again.</p>
-                <p style="font-size: 0.8em; color: #666;">Error details: ${error.message}</p>
-            </div>
-        `;
+        alert('Error opening email. Please try again.');
     }
 }
 
