@@ -74,11 +74,10 @@ async function handleAuthResponse(response) {
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         
-        // Show email tabs since we start in email section
+        // Show email tabs and trigger click on primary tab
         document.querySelector('.email-tabs').style.display = 'flex';
-        
-        const emails = await listEmails();
-        displayEmails(emails);
+        document.querySelector('.email-tab[onclick*="primary"]').click();
+
     } catch (error) {
         console.error('Error:', error);
     }
