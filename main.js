@@ -77,19 +77,9 @@ async function handleAuthResponse(response) {
         // Show email tabs
         document.querySelector('.email-tabs').style.display = 'flex';
         
-        // Get initial count and load primary emails
-        const countResponse = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': 500,
-            'labelIds': ['CATEGORY_PERSONAL']
-        });
+        // Switch to primary tab immediately after login
+        await switchTab('primary');
         
-        totalEmails = countResponse.result.resultSizeEstimate || 0;
-        
-        // Now get the first page of emails
-        const emails = await listEmails(1);
-        displayEmails(emails);
-
     } catch (error) {
         console.error('Error:', error);
     }
@@ -435,8 +425,9 @@ async function switchSection(section) {
     } else if (section === 'email') {
         document.querySelector('.nav-item.active').classList.remove('active');
         document.querySelector('[onclick="switchSection(\'email\')"]').classList.add('active');
-        const emails = await listEmails();
-        displayEmails(emails);
+        
+        // Switch to primary tab immediately
+        await switchTab('primary');
     }
 }
 
