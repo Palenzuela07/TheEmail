@@ -918,7 +918,7 @@ async function generateAIEmail() {
                 model: "gpt-3.5-turbo",
                 messages: [{
                     role: "system",
-                    content: "Only generate the email body content. Do not include any subject lines, greetings, or signatures."
+                    content: "You are an email writing assistant. Generate a complete email including a proper greeting at the start and a polite closing/signature at the end. Make it professional but friendly."
                 }, {
                     role: "user",
                     content: prompt
@@ -932,6 +932,73 @@ async function generateAIEmail() {
     } catch (error) {
         console.error('Error generating email:', error);
         alert('Error generating email. Please try again.');
+    }
+}
+
+function toggleAIChat() {
+    const promptArea = document.getElementById('ai-prompt-area');
+    const chatArea = document.getElementById('ai-chat-area');
+    
+    if (chatArea.style.display === 'none') {
+        promptArea.style.display = 'none';
+        chatArea.style.display = 'block';
+    } else {
+        promptArea.style.display = 'block';
+        chatArea.style.display = 'none';
+    }
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const messages = document.getElementById('chat-messages');
+    const userMessage = input.value.trim();
+    
+    if (!userMessage) return;
+    
+    // Add user message
+    messages.innerHTML += `
+        <div class="chat-message user">${userMessage}</div>
+    `;
+    
+    input.value = '';
+    messages.scrollTop = messages.scrollHeight;
+    
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [{
+                    role: "system",
+                    content: "You are a helpful assistant. Provide direct, accurate answers to user questions."
+                }, {
+                    role: "user",
+                    content: userMessage
+                }],
+                temperature: 0.7
+            })
+        });
+
+        const data = await response.json();
+        const aiResponse = data.choices[0].message.content;
+        
+        messages.innerHTML += `
+            <div class="chat-message ai">${aiResponse}</div>
+        `;
+        messages.scrollTop = messages.scrollHeight;
+        
+    } catch (error) {
+        console.error('Error getting AI response:', error);
+        messages.innerHTML += `
+            <div class="chat-message ai">
+                Sorry, I encountered an error. Please try again.
+            </div>
+        `;
+        messages.scrollTop = messages.scrollHeight;
     }
 }
  
