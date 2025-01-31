@@ -74,9 +74,21 @@ async function handleAuthResponse(response) {
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         
-        // Show email tabs and trigger click on primary tab
+        // Show email tabs
         document.querySelector('.email-tabs').style.display = 'flex';
-        document.querySelector('.email-tab[onclick*="primary"]').click();
+        
+        // Get initial count and load primary emails
+        const countResponse = await gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': 500,
+            'labelIds': ['CATEGORY_PERSONAL']
+        });
+        
+        totalEmails = countResponse.result.resultSizeEstimate || 0;
+        
+        // Now get the first page of emails
+        const emails = await listEmails(1);
+        displayEmails(emails);
 
     } catch (error) {
         console.error('Error:', error);
@@ -85,24 +97,21 @@ async function handleAuthResponse(response) {
 
 async function listEmails(page = 1) {
     try {
-        // Show loading state
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px;">
                 <p>Loading emails...</p>
             </div>
         `;
 
-        // Get initial page token if needed
+        // Get initial count of emails first
         if (page === 1) {
             const countResponse = await gapi.client.gmail.users.messages.list({
                 'userId': 'me',
-                'maxResults': 500,
-                'labelIds': ['INBOX'],
-                'orderBy': 'date'
+                'maxResults': 500,  // Get a larger number to get better count
+                'labelIds': ['INBOX']
             });
             totalEmails = countResponse.result.resultSizeEstimate || 0;
-            pageTokens = {};
-            pageTokens[1] = '';
+            pageTokens = { 1: '' };
             if (countResponse.result.nextPageToken) {
                 pageTokens[2] = countResponse.result.nextPageToken;
             }
@@ -117,13 +126,13 @@ async function listEmails(page = 1) {
             'orderBy': 'date'
         });
 
+        if (!response.result.messages) {
+            return [];
+        }
+
         // Store next page token
         if (response.result.nextPageToken) {
             pageTokens[page + 1] = response.result.nextPageToken;
-        }
-
-        if (!response.result.messages) {
-            return [];
         }
 
         const emails = await Promise.all(response.result.messages.map(async message => {
@@ -143,17 +152,11 @@ async function listEmails(page = 1) {
                 snippet: emailDetails.result.snippet || 'No preview available'
             };
         }));
-        
-        // Sort emails by date before returning
-        return emails.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        return emails;
 
     } catch (error) {
         console.error('Error fetching emails:', error);
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error loading emails. Please try again.</p>
-            </div>
-        `;
         return [];
     }
 }
@@ -174,12 +177,24 @@ function displayEmails(emails) {
     }
     
     const totalPages = Math.ceil(totalEmails / EMAILS_PER_PAGE);
+    const startIndex = ((currentPage - 1) * EMAILS_PER_PAGE) + 1;
+    const endIndex = startIndex + emails.length - 1;
     
     emailList.innerHTML = `
         <div class="email-list-header">
             <div class="email-count">
-                Showing ${((currentPage - 1) * EMAILS_PER_PAGE) + 1}-${Math.min(currentPage * EMAILS_PER_PAGE, totalEmails)} 
+                Showing ${startIndex}-${endIndex} 
                 of ${totalEmails}
+                <button onclick="changePage(${currentPage - 1})" 
+                        class="nav-btn" 
+                        ${currentPage === 1 ? 'disabled' : ''}>
+                    ←
+                </button>
+                <button onclick="changePage(${currentPage + 1})" 
+                        class="nav-btn" 
+                        ${currentPage === totalPages ? 'disabled' : ''}>
+                    →
+                </button>
             </div>
         </div>
         ${emails.map(email => `
@@ -538,60 +553,43 @@ function openEmailFromDashboard(emailId) {
     openEmail(emailId);
 }
 
-async function switchTab(tabName) {
-    console.log('Switching to tab:', tabName);
-
-    // Update active tab
-    document.querySelectorAll('.email-tab').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    document.querySelector(`.email-tab[onclick="switchTab('${tabName}')"]`).classList.add('active');
-
-    // Show loading state
-    document.getElementById('emailList').innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <p>Loading ${tabName} emails...</p>
-        </div>
-    `;
-
+async function switchTab(category) {
     try {
-        // Reset pagination
+        // Update active tab
+        document.querySelectorAll('.email-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`.email-tab[onclick*="${category}"]`).classList.add('active');
+
+        // Show loading state
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Loading ${category} emails...</p>
+            </div>
+        `;
+
+        // Reset page and get initial count
         currentPage = 1;
-        pageTokens = {};
 
-        let query;
-        switch(tabName) {
-            case 'updates':
-                // Look for typical update-type emails
-                query = 'in:inbox (subject:"notification" OR subject:"update" OR subject:"receipt" OR subject:"confirmation" OR from:no-reply OR from:noreply)';
-                break;
-            case 'social':
-                query = 'in:inbox category:social';
-                break;
-            case 'promotions':
-                query = 'in:inbox category:promotions';
-                break;
-            case 'primary':
-            default:
-                // Exclude updates, social, and promotions
-                query = 'in:inbox -category:social -category:promotions -subject:notification -subject:update -subject:receipt -subject:confirmation -from:no-reply -from:noreply';
-                break;
-        }
+        // Get emails for this category using Gmail's native category filters
+        const countResponse = await gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': 500,
+            'q': `category:${category}`  // Use Gmail's native category filter
+        });
+        
+        totalEmails = countResponse.result.resultSizeEstimate || 0;
 
-        console.log('Using query:', query);
-
+        // Get emails for the current page
         const response = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
             'maxResults': EMAILS_PER_PAGE,
-            'q': query
+            'q': `category:${category}`,  // Use Gmail's native category filter
+            'orderBy': 'date'
         });
 
         if (!response.result.messages) {
-            document.getElementById('emailList').innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <p>No emails in ${tabName}</p>
-                </div>
-            `;
+            displayEmails([]);
             return;
         }
 
@@ -613,17 +611,30 @@ async function switchTab(tabName) {
             };
         }));
 
-        const sortedEmails = emails.sort((a, b) => new Date(b.date) - new Date(a.date));
-        displayEmails(sortedEmails);
+        displayEmails(emails);
 
     } catch (error) {
         console.error('Error switching tab:', error);
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error loading ${tabName} emails. Please try again.</p>
-                <p style="font-size: 0.8em; color: #666;">${error.message}</p>
+                <p>Error loading emails. Please try again.</p>
             </div>
         `;
+    }
+}
+
+function getLabelId(category) {
+    switch (category.toLowerCase()) {
+        case 'primary':
+            return 'CATEGORY_PERSONAL';
+        case 'social':
+            return 'CATEGORY_SOCIAL';
+        case 'promotions':
+            return 'CATEGORY_PROMOTIONS';
+        case 'updates':
+            return 'CATEGORY_UPDATES';
+        default:
+            return 'INBOX';
     }
 }
 
