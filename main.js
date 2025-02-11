@@ -97,13 +97,34 @@ async function listEmails(page = 1) {
         if (page === 1) {
             const countResponse = await gapi.client.gmail.users.messages.list({
                 'userId': 'me',
-                'maxResults': 500,  // Get a larger number to get better count
+                'maxResults': 500,
                 'labelIds': ['INBOX']
             });
             totalEmails = countResponse.result.resultSizeEstimate || 0;
-            pageTokens = { 1: '' };
+            pageTokens = { 1: '' };  // Reset pageTokens for new listing
             if (countResponse.result.nextPageToken) {
                 pageTokens[2] = countResponse.result.nextPageToken;
+            }
+        }
+
+        // If we don't have the token for the requested page, fetch tokens sequentially
+        if (page > 1 && !pageTokens[page]) {
+            let currentPage = Object.keys(pageTokens).length;
+            let lastToken = pageTokens[currentPage];
+
+            while (currentPage < page) {
+                const response = await gapi.client.gmail.users.messages.list({
+                    'userId': 'me',
+                    'maxResults': EMAILS_PER_PAGE,
+                    'labelIds': ['INBOX'],
+                    'pageToken': lastToken
+                });
+
+                currentPage++;
+                pageTokens[currentPage] = response.result.nextPageToken;
+                lastToken = response.result.nextPageToken;
+
+                if (!lastToken) break; // No more pages available
             }
         }
 
@@ -287,12 +308,15 @@ function generatePaginationControls(currentPage, totalPages) {
 }
 
 async function changePage(newPage) {
-    if (newPage < 1) return;
+    if (newPage < 1 || newPage > Math.ceil(totalEmails / EMAILS_PER_PAGE)) return;
+    
     try {
         currentPage = newPage;
         const emails = await listEmails(currentPage);
         if (emails.length > 0) {
             displayEmails(emails);
+            // Scroll to top of email list
+            document.getElementById('emailList').scrollTop = 0;
         } else {
             console.error('No emails returned for page:', newPage);
         }
@@ -411,24 +435,15 @@ function decodeEmailText(text) {
 
 // Update switchSection function
 async function switchSection(section) {
-    // First, close any open email
+    // Close any open email
     closeEmail();
     
-    // Show/hide email tabs based on section
+    // Show email tabs
     const emailTabs = document.querySelector('.email-tabs');
-    emailTabs.style.display = section === 'email' ? 'flex' : 'none';
+    emailTabs.style.display = 'flex';
     
-    if (section === 'home') {
-        document.querySelector('.nav-item.active').classList.remove('active');
-        document.querySelector('[onclick="switchSection(\'home\')"]').classList.add('active');
-        await loadHomeDashboard();
-    } else if (section === 'email') {
-        document.querySelector('.nav-item.active').classList.remove('active');
-        document.querySelector('[onclick="switchSection(\'email\')"]').classList.add('active');
-        
-        // Switch to primary tab immediately
-        await switchTab('primary');
-    }
+    // Switch to primary tab immediately
+    await switchTab('primary');
 }
 
 function deleteEmail(emailId) {
@@ -467,81 +482,6 @@ Content: ${originalBody}`;
 function useAISuggestion(suggestionNum) {
     const suggestion = document.getElementById(`ai-suggestion-${suggestionNum}`).textContent;
     document.getElementById('compose-body').value = suggestion;
-}
-
-function displayHomeDashboard(analysis) {
-    document.getElementById('emailList').innerHTML = `
-        <div class="home-dashboard">
-            <div class="dashboard-section">
-                <div class="section-header" onclick="toggleSection('action-needed')">
-                    <h2>🎯 Action Needed <span class="count">(${analysis.actionNeeded.length})</span></h2>
-                    <span class="toggle-icon">▼</span>
-                </div>
-                <div id="action-needed" class="collapsible-content">
-                    <ul class="urgent-list">
-                        ${analysis.actionNeeded.map(item => `
-                            <li onclick="openEmailFromDashboard('${item.id}')">
-                                <strong>${item.subject}</strong>
-                                <span class="reason">${item.category}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            </div>
-
-            <div class="dashboard-section">
-                <div class="section-header" onclick="toggleSection('awaiting-response')">
-                    <h2>⏳ Awaiting Response <span class="count">(${analysis.awaitingResponse.length})</span></h2>
-                    <span class="toggle-icon">▼</span>
-                </div>
-                <div id="awaiting-response" class="collapsible-content">
-                    <ul class="non-urgent-list">
-                        ${analysis.awaitingResponse.map(item => `
-                            <li onclick="openEmailFromDashboard('${item.id}')">
-                                <span class="category">${item.category}</span>
-                                <span class="subject">${item.subject}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            </div>
-
-            <div class="dashboard-section">
-                <div class="section-header" onclick="toggleSection('to-review')">
-                    <h2>📋 To Review <span class="count">(${analysis.toReview.length})</span></h2>
-                    <span class="toggle-icon">▼</span>
-                </div>
-                <div id="to-review" class="collapsible-content">
-                    <ul class="non-urgent-list">
-                        ${analysis.toReview.map(item => `
-                            <li onclick="openEmailFromDashboard('${item.id}')">
-                                <span class="category">${item.category}</span>
-                                <span class="subject">${item.subject}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-// Add these new functions
-function toggleSection(sectionId) {
-    const content = document.getElementById(sectionId);
-    const icon = content.parentElement.querySelector('.toggle-icon');
-    
-    if (content.style.maxHeight) {
-        content.style.maxHeight = null;
-        icon.textContent = '▼';
-    } else {
-        content.style.maxHeight = content.scrollHeight + "px";
-        icon.textContent = '▲';
-    }
-}
-
-function openEmailFromDashboard(emailId) {
-    openEmail(emailId);
 }
 
 async function switchTab(category) {
@@ -626,116 +566,6 @@ function getLabelId(category) {
             return 'CATEGORY_UPDATES';
         default:
             return 'INBOX';
-    }
-}
-
-async function loadHomeDashboard() {
-    try {
-        // Show loading state
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p>Analyzing your recent emails...</p>
-            </div>
-        `;
-
-        // Get recent emails
-        const emailsResponse = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': 50,
-            'labelIds': ['INBOX'],
-            'q': 'in:inbox newer_than:7d'
-        });
-
-        if (!emailsResponse.result.messages) {
-            document.getElementById('emailList').innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <p>No emails found to analyze.</p>
-                </div>
-            `;
-            return;
-        }
-
-        // Get details for each email
-        const emails = await Promise.all(emailsResponse.result.messages.map(async message => {
-            const emailDetails = await gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date', 'Importance']
-            });
-            
-            const headers = emailDetails.result.payload.headers;
-            return {
-                id: message.id,
-                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                from: headers.find(header => header.name === 'From')?.value || '',
-                snippet: emailDetails.result.snippet || '',
-                importance: headers.find(h => h.name === 'Importance')?.value || ''
-            };
-        }));
-
-        // Categorize emails based on simple rules
-        const analysis = {
-            actionNeeded: [],
-            awaitingResponse: [],
-            toReview: []
-        };
-
-        emails.forEach(email => {
-            const subjectLower = email.subject.toLowerCase();
-            const snippetLower = email.snippet.toLowerCase();
-            const fromLower = email.from.toLowerCase();
-
-            // Action Needed
-            if (
-                email.importance === 'high' ||
-                subjectLower.includes('urgent') ||
-                subjectLower.includes('asap') ||
-                subjectLower.includes('deadline') ||
-                subjectLower.includes('action required') ||
-                snippetLower.includes('please respond')
-            ) {
-                analysis.actionNeeded.push({
-                    id: email.id,
-                    subject: email.subject,
-                    category: 'Urgent'
-                });
-            }
-            // Awaiting Response
-            else if (
-                snippetLower.includes('please review') ||
-                snippetLower.includes('let me know') ||
-                snippetLower.includes('what do you think') ||
-                snippetLower.includes('your feedback') ||
-                snippetLower.includes('your thoughts')
-            ) {
-                analysis.awaitingResponse.push({
-                    id: email.id,
-                    subject: email.subject,
-                    category: 'Needs Response'
-                });
-            }
-            // To Review
-            else {
-                analysis.toReview.push({
-                    id: email.id,
-                    subject: email.subject,
-                    category: 'Review'
-                });
-            }
-        });
-
-        // Display the dashboard
-        displayHomeDashboard(analysis);
-
-    } catch (error) {
-        console.error('Error loading home dashboard:', error);
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error analyzing emails. Please try again.</p>
-                <p style="font-size: 0.8em; color: #666;">${error.message}</p>
-            </div>
-        `;
     }
 }
 

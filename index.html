@@ -528,117 +528,6 @@
             z-index: 3;
         }
 
-        .home-dashboard {
-            padding: 20px;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .dashboard-section {
-            background: white;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 12px;
-            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
-            max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .dashboard-section h2 {
-            margin-top: 0;
-            color: #202124;
-            font-size: 1.2em;
-            margin-bottom: 16px;
-        }
-
-        .urgent-list, .non-urgent-list, .action-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .urgent-list li {
-            padding: 12px;
-            background: #fef7f7;
-            border-radius: 4px;
-            margin-bottom: 8px;
-        }
-
-        .urgent-list .reason {
-            display: block;
-            color: #d93025;
-            font-size: 0.9em;
-            margin-top: 4px;
-        }
-
-        .non-urgent-list li {
-            padding: 12px;
-            border-bottom: 1px solid #eceff1;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .category {
-            background: #e8f0fe;
-            color: #1a73e8;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-        }
-
-        .action-list li {
-            padding: 8px 0;
-            color: #202124;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            padding: 8px 0;
-        }
-
-        .section-header:hover {
-            opacity: 0.8;
-        }
-
-        .toggle-icon {
-            font-size: 12px;
-            color: #5f6368;
-            transition: transform 0.3s ease;
-        }
-
-        .collapsible-content {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease-out;
-        }
-
-        .urgent-list li, .non-urgent-list li {
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .urgent-list li:hover, .non-urgent-list li:hover {
-            background-color: #f8f9fa;
-        }
-
-        /* Handle specific dark mode overrides */
-        .email-full-body [style*="background-color"],
-        .email-full-body [bgcolor] {
-            background-color: white !important;
-        }
-
-        .email-full-body [style*="color: rgb(0, 0, 0)"],
-        .email-full-body [style*="color: black"],
-        .email-full-body [style*="color:#000000"],
-        .email-full-body [style*="color: #000"] {
-            color: #202124 !important;
-        }
-
         .top-bar {
             display: flex;
             justify-content: flex-end;
@@ -736,39 +625,6 @@
         .email-tabs:not([style*="display: none"]) + .email-list {
             border-radius: 0;
             margin-top: -1px;
-        }
-
-        .summary-list {
-            list-style-type: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .summary-list li {
-            position: relative;
-            padding: 8px 0 8px 24px;
-            line-height: 1.4;
-        }
-
-        .summary-list li:before {
-            content: "•";
-            position: absolute;
-            left: 8px;
-            color: #1a73e8;
-        }
-
-        .section-header h2 {
-            font-size: 1.1em;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .count {
-            color: #5f6368;
-            font-size: 0.9em;
-            font-weight: normal;
         }
 
         .modal {
@@ -1129,10 +985,6 @@
             <div class="sidebar">
                 <button class="compose-btn">Compose</button>
                 <div class="nav-section">
-                    <div class="nav-item" onclick="switchSection('home')">
-                        <span class="nav-icon">🏠</span>
-                        <span class="nav-text">Home</span>
-                    </div>
                     <div class="nav-item active" onclick="switchSection('email')">
                         <span class="nav-icon">📧</span>
                         <span class="nav-text">Email</span>
