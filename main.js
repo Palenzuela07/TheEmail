@@ -1015,3 +1015,35 @@ async function performSearch() {
         `;
     }
 }
+
+async function toggleStar(emailId, isCurrentlyStarred) {
+    try {
+        const labelAction = isCurrentlyStarred ? 'remove' : 'add';
+        const labelId = 'STARRED';
+
+        // Update the email's labels
+        await gapi.client.gmail.users.messages.modify({
+            'userId': 'me',
+            'id': emailId,
+            'resource': {
+                [`${labelAction}LabelIds`]: [labelId]
+            }
+        });
+
+        // Update the UI
+        const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
+        if (starElement) {
+            if (isCurrentlyStarred) {
+                starElement.classList.remove('gold-star');
+                starElement.innerHTML = '☆';
+            } else {
+                starElement.classList.add('gold-star');
+                starElement.innerHTML = '<span class="gold-star">★</span>';
+            }
+        }
+
+        console.log(`Email ${emailId} ${labelAction}ed to starred.`);
+    } catch (error) {
+        console.error('Error toggling star:', error);
+    }
+}
