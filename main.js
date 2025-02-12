@@ -36,7 +36,7 @@ function initializeAPI() {
 
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
-                scope: SCOPES,
+                scope: 'https://www.googleapis.com/auth/gmail.modify',
                 callback: handleAuthResponse,
                 ux_mode: 'redirect',
                 include_granted_scopes: true
@@ -56,7 +56,9 @@ function handleAuthClick() {
         return;
     }
 
-    tokenClient.requestAccessToken();
+    tokenClient.requestAccessToken({
+        prompt: 'consent' // Force re-consent to ensure all scopes are granted
+    });
 }
 
 async function handleAuthResponse(response) {
@@ -213,9 +215,11 @@ function displayEmails(emails) {
             </div>
         </div>
         ${emails.map(email => `
-            <div class="email-item" onclick="openEmail('${email.id}')" style="cursor: pointer;">
+            <div class="email-item" data-id="${email.id}" onclick="openEmail('${email.id}')" style="cursor: pointer;">
                 <input type="checkbox" class="email-checkbox" onclick="event.stopPropagation()">
-                <span class="email-star" onclick="event.stopPropagation()">☆</span>
+                <span class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', this.textContent === '★')">
+                    ${email.isStarred ? '★' : '☆'}
+                </span>
                 <div class="email-content">
                     <div class="email-sender">${formatSender(email.from)}</div>
                     <div class="email-subject">${email.subject}</div>
@@ -942,3 +946,37 @@ document.addEventListener('DOMContentLoaded', () => {
     //     switchTab('primary');
     // }
 });
+
+async function toggleStar(emailId, isStarred) {
+    if (!gapiInited || !gisInited) {
+        console.error('Google API not initialized');
+        return;
+    }
+
+    try {
+        console.log(`Toggling star for email ID: ${emailId}, currently starred: ${isStarred}`);
+
+        const request = {
+            'userId': 'me',
+            'id': emailId,
+            'addLabelIds': isStarred ? [] : ['STARRED'],
+            'removeLabelIds': isStarred ? ['STARRED'] : []
+        };
+
+        const response = await gapi.client.gmail.users.messages.modify(request);
+        console.log('API response:', response);
+
+        if (response.status === 200) {
+            // Update the UI to reflect the change
+            const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
+            if (starElement) {
+                starElement.textContent = isStarred ? '☆' : '★'; // Toggle star icon
+            }
+            console.log(`Email ${isStarred ? 'unstarred' : 'starred'} successfully.`);
+        } else {
+            console.error('Failed to toggle star:', response);
+        }
+    } catch (error) {
+        console.error('Error toggling star:', error);
+    }
+}
