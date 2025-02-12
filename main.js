@@ -20,6 +20,9 @@ let nextPageToken = null;
 let currentEmail = null;
 let currentFilter = 'primary'; // Default filter
 
+// Define a maximum number of retry attempts
+const MAX_RETRY_ATTEMPTS = 3;
+
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
 function initializeAPI() {
@@ -665,10 +668,28 @@ async function sendEmail() {
 // Update the compose button click handler
 document.querySelector('.compose-btn').onclick = () => openComposeModal();
 
-async function refreshEmails() {
+// Helper function to add a timeout to a promise
+function withTimeout(promise, timeout) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+        )
+    ]);
+}
+
+// Function to refresh emails with retry logic
+async function refreshEmails(retryCount = 0) {
     try {
-        // Use the current filter to refresh emails
-        const emails = await listEmails(currentPage, currentFilter);
+        // Show loading indicator
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Loading emails...</p>
+            </div>
+        `;
+
+        // Use the current filter to refresh emails with a timeout
+        const emails = await withTimeout(listEmails(currentPage, currentFilter), 5000); // 5-second timeout
         if (emails.length > 0) {
             displayEmails(emails);
         } else {
@@ -681,11 +702,18 @@ async function refreshEmails() {
         }
     } catch (error) {
         console.error('Error refreshing emails:', error);
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error refreshing emails. Please try again.</p>
-            </div>
-        `;
+
+        // Retry logic
+        if (retryCount < MAX_RETRY_ATTEMPTS) {
+            console.log(`Retrying... (${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+            setTimeout(() => refreshEmails(retryCount + 1), 2000); // Retry after 2 seconds
+        } else {
+            document.getElementById('emailList').innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #d93025;">
+                    <p>Error refreshing emails. Please try again later.</p>
+                </div>
+            `;
+        }
     }
 }
 
