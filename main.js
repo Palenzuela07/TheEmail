@@ -666,13 +666,26 @@ async function sendEmail() {
 document.querySelector('.compose-btn').onclick = () => openComposeModal();
 
 async function refreshEmails() {
-    const activeTab = document.querySelector('.email-tab.active');
-    if (activeTab) {
-        const tabName = activeTab.textContent.trim().toLowerCase();
-        await switchTab(tabName);
-    } else {
-        const emails = await listEmails();
-        displayEmails(emails);
+    try {
+        // Use the current filter to refresh emails
+        const emails = await listEmails(currentPage, currentFilter);
+        if (emails.length > 0) {
+            displayEmails(emails);
+        } else {
+            console.error('No emails returned during refresh.');
+            document.getElementById('emailList').innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #d93025;">
+                    <p>No emails found. Please try again.</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error refreshing emails:', error);
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>Error refreshing emails. Please try again.</p>
+            </div>
+        `;
     }
 }
 
@@ -785,7 +798,7 @@ function toggleAIChat() {
     }
 }
 
-async function sendChatMessage() {
+function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const messages = document.getElementById('chat-messages');
     const userMessage = input.value.trim();
@@ -794,12 +807,30 @@ async function sendChatMessage() {
     
     // Add user message
     messages.innerHTML += `
-        <div class="chat-message user">${userMessage}</div>
+        <div class="chat-message user">
+            ${userMessage}
+        </div>
     `;
-    
-    input.value = '';
-    messages.scrollTop = messages.scrollHeight;
-    
+    input.value = ''; // Clear input field
+
+    // Simulate AI response
+    setTimeout(() => {
+        messages.innerHTML += `
+            <div class="chat-message ai">
+                I'm here to help! What would you like to know?
+            </div>
+        `;
+        messages.scrollTop = messages.scrollHeight; // Scroll to the bottom
+    }, 1000);
+}
+
+async function generateAIEmail() {
+    const prompt = document.getElementById('ai-prompt').value;
+    if (!prompt) {
+        alert('Please describe the email you want to write');
+        return;
+    }
+
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -811,31 +842,32 @@ async function sendChatMessage() {
                 model: "gpt-3.5-turbo",
                 messages: [{
                     role: "system",
-                    content: "You are a helpful assistant. Provide direct, accurate answers to user questions."
+                    content: "You are an email writing assistant. Generate a complete email including a proper greeting at the start and a polite closing/signature at the end. Make it professional but friendly."
                 }, {
                     role: "user",
-                    content: userMessage
+                    content: prompt
                 }],
                 temperature: 0.7
             })
         });
 
         const data = await response.json();
-        const aiResponse = data.choices[0].message.content;
-        
-        messages.innerHTML += `
-            <div class="chat-message ai">${aiResponse}</div>
-        `;
-        messages.scrollTop = messages.scrollHeight;
-        
+        document.getElementById('compose-body').value = data.choices[0].message.content;
     } catch (error) {
-        console.error('Error getting AI response:', error);
-        messages.innerHTML += `
-            <div class="chat-message ai">
-                Sorry, I encountered an error. Please try again.
-            </div>
-        `;
-        messages.scrollTop = messages.scrollHeight;
+        console.error('Error generating email:', error);
+        alert('Error generating email. Please try again.');
     }
 }
- 
+
+function toggleAIChat() {
+    const promptArea = document.getElementById('ai-prompt-area');
+    const chatArea = document.getElementById('ai-chat-area');
+    
+    if (chatArea.style.display === 'none') {
+        promptArea.style.display = 'none';
+        chatArea.style.display = 'block';
+    } else {
+        promptArea.style.display = 'block';
+        chatArea.style.display = 'none';
+    }
+}
