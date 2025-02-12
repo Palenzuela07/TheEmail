@@ -367,10 +367,10 @@ async function openEmail(emailId) {
                 // Handle multipart message
                 for (let part of payload.parts) {
                     if (part.mimeType === 'text/html') {
-                        return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                        return decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
                     }
                     if (part.mimeType === 'text/plain' && !content) {
-                        content = atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                        content = decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
                     }
                     if (part.parts) {
                         const nestedContent = getBody(part);
@@ -380,7 +380,7 @@ async function openEmail(emailId) {
                 return content;
             } else if (payload.body.data) {
                 // Handle single part message
-                return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+                return decodeURIComponent(escape(atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
             }
             return '';
         }
