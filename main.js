@@ -99,51 +99,24 @@ async function listEmails(page = 1, filter = 'primary') {
             </div>
         `;
 
-        // Get initial count of emails first
-        if (page === 1) {
-            const countResponse = await gapi.client.gmail.users.messages.list({
+        // Use a timeout for the API call
+        const response = await withTimeout(
+            gapi.client.gmail.users.messages.list({
                 'userId': 'me',
-                'maxResults': 500,
-                'q': `category:${filter}`  // Use the filter parameter
-            });
-            totalEmails = countResponse.result.resultSizeEstimate || 0;
-            pageTokens = { 1: '' };  // Reset pageTokens for new listing
-            if (countResponse.result.nextPageToken) {
-                pageTokens[2] = countResponse.result.nextPageToken;
-            }
-        }
-
-        // If we don't have the token for the requested page, fetch tokens sequentially
-        if (page > 1 && !pageTokens[page]) {
-            let currentPage = Object.keys(pageTokens).length;
-            let lastToken = pageTokens[currentPage];
-
-            while (currentPage < page) {
-                const response = await gapi.client.gmail.users.messages.list({
-                    'userId': 'me',
-                    'maxResults': EMAILS_PER_PAGE,
-                    'q': `category:${filter}`,  // Use the filter parameter
-                    'pageToken': lastToken
-                });
-
-                currentPage++;
-                pageTokens[currentPage] = response.result.nextPageToken;
-                lastToken = response.result.nextPageToken;
-
-                if (!lastToken) break; // No more pages available
-            }
-        }
-
-        // Get emails for current page
-        const response = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': EMAILS_PER_PAGE,
-            'q': `category:${filter}`,  // Use the filter parameter
-            'pageToken': page === 1 ? undefined : pageTokens[page],
-            'orderBy': 'date'
-        });
+                'maxResults': EMAILS_PER_PAGE,
+                'q': `category:${filter}`,
+                'pageToken': page === 1 ? undefined : pageTokens[page],
+                'orderBy': 'date'
+            }),
+            10000 // 10-second timeout
+        );
 
         if (!response.result.messages) {
+            document.getElementById('emailList').innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <p>No emails found.</p>
+                </div>
+            `;
             return [];
         }
 
@@ -161,8 +134,8 @@ async function listEmails(page = 1, filter = 'primary') {
             });
             
             const headers = emailDetails.result.payload.headers;
-            const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
-            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT'); // Check if the email is important
+            const isStarred = emailDetails.result.labelIds.includes('STARRED');
+            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
 
             return {
                 id: message.id,
@@ -170,8 +143,8 @@ async function listEmails(page = 1, filter = 'primary') {
                 from: headers.find(header => header.name === 'From')?.value || '(no sender)',
                 date: headers.find(header => header.name === 'Date')?.value || '',
                 snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred, // Add the isStarred property
-                isImportant // Add the isImportant property
+                isStarred,
+                isImportant
             };
         }));
 
@@ -179,6 +152,11 @@ async function listEmails(page = 1, filter = 'primary') {
 
     } catch (error) {
         console.error('Error fetching emails:', error);
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>Error loading emails. Please try again later.</p>
+            </div>
+        `;
         return [];
     }
 }
