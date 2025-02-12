@@ -162,6 +162,7 @@ async function listEmails(page = 1, filter = 'primary') {
             
             const headers = emailDetails.result.payload.headers;
             const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
+            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT'); // Check if the email is important
 
             return {
                 id: message.id,
@@ -169,7 +170,8 @@ async function listEmails(page = 1, filter = 'primary') {
                 from: headers.find(header => header.name === 'From')?.value || '(no sender)',
                 date: headers.find(header => header.name === 'Date')?.value || '',
                 snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred // Add the isStarred property
+                isStarred, // Add the isStarred property
+                isImportant // Add the isImportant property
             };
         }));
 
@@ -223,6 +225,7 @@ function displayEmails(emails) {
                 <span class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', this.classList.contains('gold-star'))">
                     ${email.isStarred ? '<span class="gold-star">★</span>' : '☆'}
                 </span>
+                ${email.isImportant ? '<span class="email-important" style="color: red;">❗</span>' : ''}
                 <div class="email-content">
                     <div class="email-sender">${formatSender(email.from)}</div>
                     <div class="email-subject">${email.subject}</div>
@@ -588,6 +591,7 @@ async function switchTab(category) {
             
             const headers = emailDetails.result.payload.headers;
             const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
+            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT'); // Check if the email is important
 
             return {
                 id: message.id,
@@ -595,7 +599,8 @@ async function switchTab(category) {
                 from: headers.find(header => header.name === 'From')?.value || '(no sender)',
                 date: headers.find(header => header.name === 'Date')?.value || '',
                 snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred // Add the isStarred property
+                isStarred, // Add the isStarred property
+                isImportant // Add the isImportant property
             };
         }));
 
