@@ -515,6 +515,14 @@ async function switchTab(category) {
             </div>
         `;
 
+        // Show or hide category tabs based on the selected tab
+        const emailTabs = document.querySelector('.email-tabs');
+        if (category === 'primary') {
+            emailTabs.style.display = 'flex';
+        } else {
+            emailTabs.style.display = 'none';
+        }
+
         // Reset page and get initial count
         currentPage = 1;
 
