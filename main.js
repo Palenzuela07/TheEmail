@@ -490,15 +490,16 @@ function useAISuggestion(suggestionNum) {
 }
 
 async function switchTab(category) {
+    console.log(`Switching to ${category} tab`);
     // Update the current filter
     currentFilter = category;
     
     try {
         // Update active tab
-        document.querySelectorAll('.email-tab').forEach(tab => {
+        document.querySelectorAll('.email-tab, .sub-nav-item').forEach(tab => {
             tab.classList.remove('active');
         });
-        document.querySelector(`.email-tab[onclick*="${category}"]`).classList.add('active');
+        document.querySelector(`.email-tab[onclick*="${category}"], .sub-nav-item[onclick*="${category}"]`).classList.add('active');
 
         // Show loading state
         document.getElementById('emailList').innerHTML = `
@@ -510,11 +511,41 @@ async function switchTab(category) {
         // Reset page and get initial count
         currentPage = 1;
 
-        // Get emails for this category using Gmail's native category filters
+        // Use Gmail's native category filter
+        let query;
+        switch (category) {
+            case 'primary':
+                query = 'category:primary';
+                break;
+            case 'promotions':
+                query = 'category:promotions';
+                break;
+            case 'social':
+                query = 'category:social';
+                break;
+            case 'updates':
+                query = 'category:updates';
+                break;
+            case 'starred':
+                query = 'is:starred';
+                break;
+            case 'important':
+                query = 'is:important';
+                break;
+            case 'sent':
+                query = 'in:sent';
+                break;
+            default:
+                query = '';
+        }
+
+        console.log(`Querying emails with: ${query}`);
+
+        // Get initial count of emails
         const countResponse = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
             'maxResults': 500,
-            'q': `category:${category}`  // Use Gmail's native category filter
+            'q': query
         });
         
         totalEmails = countResponse.result.resultSizeEstimate || 0;
@@ -523,7 +554,7 @@ async function switchTab(category) {
         const response = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
             'maxResults': EMAILS_PER_PAGE,
-            'q': `category:${category}`,  // Use Gmail's native category filter
+            'q': query,
             'orderBy': 'date'
         });
 
@@ -899,3 +930,15 @@ function toggleAIChat() {
         chatArea.style.display = 'none';
     }
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    // Remove automatic login check
+    // if (localStorage.getItem('isAuthenticated') === 'true') {
+    //     document.getElementById('login-container').style.display = 'none';
+    //     document.getElementById('app').style.display = 'block';
+    //     document.getElementById('user-greeting').textContent = `Hi, ${localStorage.getItem('userEmail')}`;
+        
+    //     // Call switchTab to load the primary tab
+    //     switchTab('primary');
+    // }
+});
