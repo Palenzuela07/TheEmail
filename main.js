@@ -466,32 +466,45 @@ function deleteEmail(emailId) {
 }
 
 async function replyEmail(emailId) {
-    const emailContent = document.querySelector('.email-full-content');
-    if (!emailContent) return;
+    console.log('Replying to email ID:', emailId); // Debugging log
+    try {
+        const response = await gapi.client.gmail.users.messages.get({
+            'userId': 'me',
+            'id': emailId,
+            'format': 'full'
+        });
 
-    // Extract email details
-    const fromText = emailContent.querySelector('.email-full-metadata div:first-child').textContent;
-    const emailMatch = fromText.match(/<(.+?)>/) || fromText.match(/[\w.-]+@[\w.-]+\.\w+/);
-    const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
-    
-    const subject = emailContent.querySelector('.email-full-subject').textContent;
-    
-    // Get clean text content without HTML
-    const originalBody = emailContent.querySelector('.email-full-body').textContent.trim();
+        const email = response.result;
+        const headers = email.payload.headers;
 
-    // Create a clean prompt for AI
-    const cleanPrompt = `Help me write a response to this email:
+        // Extract email details
+        const fromHeader = headers.find(header => header.name === 'From')?.value || '';
+        const emailMatch = fromHeader.match(/<(.+?)>/) || fromHeader.match(/[\w.-]+@[\w.-]+\.\w+/);
+        const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
 
-From: ${fromText}
+        const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
+        const originalBody = decodeEmailText(email.snippet || '');
+
+        console.log('Reply details:', { replyToEmail, subject, originalBody }); // Debugging log
+
+        // Create a clean prompt for AI
+        const cleanPrompt = `Help me write a response to this email:
+
+From: ${fromHeader}
 Subject: ${subject}
 Content: ${originalBody}`;
 
-    // Open compose modal with reply details
-    openComposeModal({
-        from: replyToEmail,
-        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-        originalContent: cleanPrompt
-    });
+        // Open compose modal with reply details
+        openComposeModal({
+            from: replyToEmail,
+            subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+            originalContent: cleanPrompt
+        });
+
+    } catch (error) {
+        console.error('Error preparing reply:', error);
+        alert('Error preparing reply. Please try again.');
+    }
 }
 
 function useAISuggestion(suggestionNum) {
