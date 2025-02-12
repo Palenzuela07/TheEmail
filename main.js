@@ -161,12 +161,15 @@ async function listEmails(page = 1, filter = 'primary') {
             });
             
             const headers = emailDetails.result.payload.headers;
+            const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
+
             return {
                 id: message.id,
                 subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
                 from: headers.find(header => header.name === 'From')?.value || '(no sender)',
                 date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available'
+                snippet: emailDetails.result.snippet || 'No preview available',
+                isStarred // Add the isStarred property
             };
         }));
 
@@ -217,8 +220,8 @@ function displayEmails(emails) {
         ${emails.map(email => `
             <div class="email-item" data-id="${email.id}" onclick="openEmail('${email.id}')" style="cursor: pointer;">
                 <input type="checkbox" class="email-checkbox" onclick="event.stopPropagation()">
-                <span class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', this.textContent === '★')">
-                    ${email.isStarred ? '★' : '☆'}
+                <span class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', this.classList.contains('gold-star'))">
+                    ${email.isStarred ? '<span class="gold-star">★</span>' : '☆'}
                 </span>
                 <div class="email-content">
                     <div class="email-sender">${formatSender(email.from)}</div>
@@ -576,12 +579,15 @@ async function switchTab(category) {
             });
             
             const headers = emailDetails.result.payload.headers;
+            const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
+
             return {
                 id: message.id,
                 subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
                 from: headers.find(header => header.name === 'From')?.value || '(no sender)',
                 date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available'
+                snippet: emailDetails.result.snippet || 'No preview available',
+                isStarred // Add the isStarred property
             };
         }));
 
@@ -970,7 +976,13 @@ async function toggleStar(emailId, isStarred) {
             // Update the UI to reflect the change
             const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
             if (starElement) {
-                starElement.textContent = isStarred ? '☆' : '★'; // Toggle star icon
+                if (isStarred) {
+                    starElement.innerHTML = '☆';
+                    starElement.classList.remove('gold-star');
+                } else {
+                    starElement.innerHTML = '<span class="gold-star">★</span>';
+                    starElement.classList.add('gold-star');
+                }
             }
             console.log(`Email ${isStarred ? 'unstarred' : 'starred'} successfully.`);
         } else {
