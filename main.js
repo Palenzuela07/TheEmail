@@ -500,7 +500,31 @@ function useAISuggestion(suggestionNum) {
 }
 
 async function switchTab(category) {
-    console.log(`Switching to ${category} tab`);
+    console.log(`Switching to ${category} tab`); // Debugging log
+    currentFilter = category;
+
+    // Update the search input placeholder based on the current tab
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = ''; // Clear the search input
+        console.log('Search input cleared'); // Debugging log
+        switch (category) {
+            case 'starred':
+                searchInput.placeholder = 'Search starred emails...';
+                break;
+            case 'important':
+                searchInput.placeholder = 'Search important emails...';
+                break;
+            case 'sent':
+                searchInput.placeholder = 'Search sent emails...';
+                break;
+            default:
+                searchInput.placeholder = 'Search emails...';
+        }
+    } else {
+        console.error('Search input element not found');
+    }
+
     // Update the current filter
     currentFilter = category;
     
@@ -906,102 +930,88 @@ function sendChatMessage() {
     }, 1000);
 }
 
-async function generateAIEmail() {
-    const prompt = document.getElementById('ai-prompt').value;
-    if (!prompt) {
-        alert('Please describe the email you want to write');
+async function performSearch() {
+    const query = document.getElementById('search-input').value.trim();
+    if (!query) {
+        alert('Please enter a search query');
         return;
     }
 
+    let prefix = '';
+    switch (currentFilter) {
+        case 'starred':
+            prefix = 'is:starred';
+            break;
+        case 'important':
+            prefix = 'is:important';
+            break;
+        case 'sent':
+            prefix = 'in:sent';
+            break;
+        default:
+            prefix = `category:${currentFilter}`;
+    }
+
+    const searchQuery = `${prefix} ${query}`.trim();
+    console.log(`Current Filter: ${currentFilter}`);
+    console.log(`Search Query: ${searchQuery}`);
+
     try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [{
-                    role: "system",
-                    content: "You are an email writing assistant. Generate a complete email including a proper greeting at the start and a polite closing/signature at the end. Make it professional but friendly."
-                }, {
-                    role: "user",
-                    content: prompt
-                }],
-                temperature: 0.7
-            })
+        console.log(`Searching emails with query: ${searchQuery}`);
+
+        // Show loading state
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Searching emails...</p>
+            </div>
+        `;
+
+        // Reset page and get initial count
+        currentPage = 1;
+
+        // Perform search using the query
+        const response = await gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': EMAILS_PER_PAGE,
+            'q': searchQuery
         });
 
-        const data = await response.json();
-        document.getElementById('compose-body').value = data.choices[0].message.content;
-    } catch (error) {
-        console.error('Error generating email:', error);
-        alert('Error generating email. Please try again.');
-    }
-}
-
-function toggleAIChat() {
-    const promptArea = document.getElementById('ai-prompt-area');
-    const chatArea = document.getElementById('ai-chat-area');
-    
-    if (chatArea.style.display === 'none') {
-        promptArea.style.display = 'none';
-        chatArea.style.display = 'block';
-    } else {
-        promptArea.style.display = 'block';
-        chatArea.style.display = 'none';
-    }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-    // Remove automatic login check
-    // if (localStorage.getItem('isAuthenticated') === 'true') {
-    //     document.getElementById('login-container').style.display = 'none';
-    //     document.getElementById('app').style.display = 'block';
-    //     document.getElementById('user-greeting').textContent = `Hi, ${localStorage.getItem('userEmail')}`;
-        
-    //     // Call switchTab to load the primary tab
-    //     switchTab('primary');
-    // }
-});
-
-async function toggleStar(emailId, isStarred) {
-    if (!gapiInited || !gisInited) {
-        console.error('Google API not initialized');
-        return;
-    }
-
-    try {
-        console.log(`Toggling star for email ID: ${emailId}, currently starred: ${isStarred}`);
-
-        const request = {
-            'userId': 'me',
-            'id': emailId,
-            'addLabelIds': isStarred ? [] : ['STARRED'],
-            'removeLabelIds': isStarred ? ['STARRED'] : []
-        };
-
-        const response = await gapi.client.gmail.users.messages.modify(request);
-        console.log('API response:', response);
-
-        if (response.status === 200) {
-            // Update the UI to reflect the change
-            const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
-            if (starElement) {
-                if (isStarred) {
-                    starElement.innerHTML = '☆';
-                    starElement.classList.remove('gold-star');
-                } else {
-                    starElement.innerHTML = '<span class="gold-star">★</span>';
-                    starElement.classList.add('gold-star');
-                }
-            }
-            console.log(`Email ${isStarred ? 'unstarred' : 'starred'} successfully.`);
-        } else {
-            console.error('Failed to toggle star:', response);
+        if (!response.result.messages) {
+            displayEmails([]);
+            return;
         }
+
+        const emails = await Promise.all(response.result.messages.map(async message => {
+            const emailDetails = await gapi.client.gmail.users.messages.get({
+                'userId': 'me',
+                'id': message.id,
+                'format': 'metadata',
+                'metadataHeaders': ['Subject', 'From', 'Date']
+            });
+            
+            const headers = emailDetails.result.payload.headers;
+            const isStarred = emailDetails.result.labelIds.includes('STARRED');
+            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
+
+            return {
+                id: message.id,
+                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
+                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
+                date: headers.find(header => header.name === 'Date')?.value || '',
+                snippet: emailDetails.result.snippet || 'No preview available',
+                isStarred,
+                isImportant
+            };
+        }));
+
+        displayEmails(emails);
+
     } catch (error) {
-        console.error('Error toggling star:', error);
+        console.error('Error performing search:', error);
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>Error searching emails. Please try again.</p>
+            </div>
+        `;
     }
 }
