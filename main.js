@@ -18,6 +18,7 @@ let totalEmails = 0;
 let pageTokens = {};
 let nextPageToken = null;
 let currentEmail = null;
+let currentFilter = 'primary'; // Default filter
 
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
@@ -85,7 +86,7 @@ async function handleAuthResponse(response) {
     }
 }
 
-async function listEmails(page = 1) {
+async function listEmails(page = 1, filter = 'primary') {
     try {
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px;">
@@ -98,7 +99,7 @@ async function listEmails(page = 1) {
             const countResponse = await gapi.client.gmail.users.messages.list({
                 'userId': 'me',
                 'maxResults': 500,
-                'labelIds': ['INBOX']
+                'q': `category:${filter}`  // Use the filter parameter
             });
             totalEmails = countResponse.result.resultSizeEstimate || 0;
             pageTokens = { 1: '' };  // Reset pageTokens for new listing
@@ -116,7 +117,7 @@ async function listEmails(page = 1) {
                 const response = await gapi.client.gmail.users.messages.list({
                     'userId': 'me',
                     'maxResults': EMAILS_PER_PAGE,
-                    'labelIds': ['INBOX'],
+                    'q': `category:${filter}`,  // Use the filter parameter
                     'pageToken': lastToken
                 });
 
@@ -132,7 +133,7 @@ async function listEmails(page = 1) {
         const response = await gapi.client.gmail.users.messages.list({
             'userId': 'me',
             'maxResults': EMAILS_PER_PAGE,
-            'labelIds': ['INBOX'],
+            'q': `category:${filter}`,  // Use the filter parameter
             'pageToken': page === 1 ? undefined : pageTokens[page],
             'orderBy': 'date'
         });
@@ -312,7 +313,8 @@ async function changePage(newPage) {
     
     try {
         currentPage = newPage;
-        const emails = await listEmails(currentPage);
+        // Use the current filter to fetch emails
+        const emails = await listEmails(currentPage, currentFilter);
         if (emails.length > 0) {
             displayEmails(emails);
             // Scroll to top of email list
@@ -485,6 +487,9 @@ function useAISuggestion(suggestionNum) {
 }
 
 async function switchTab(category) {
+    // Update the current filter
+    currentFilter = category;
+    
     try {
         // Update active tab
         document.querySelectorAll('.email-tab').forEach(tab => {
