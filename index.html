@@ -878,8 +878,8 @@
         }
 
         .chat-message.ai {
-            background: white;
-            border: 1px solid #dadce0;
+            background: #f8f9fa;
+            border: none;
             border-radius: 12px 12px 12px 0;
         }
 
@@ -1070,7 +1070,7 @@
                     <input type="text" id="search-input" placeholder="Search emails..." onkeypress="handleSearch(event)">
                     <button onclick="performSearch()">Search</button>
                 </div>
-                <div class="email-tabs">
+                <div class="email-tabs" id="email-tabs">
                     <button class="refresh-btn" onclick="refreshEmails()">
                         <span class="refresh-icon">🔄</span>
                     </button>
@@ -1129,15 +1129,7 @@
                 <div class="compose-split-view">
                     <div class="ai-suggestions">
                         <h3>AI Assistant</h3>
-                        <div id="ai-prompt-area">
-                            <textarea id="ai-prompt" 
-                                placeholder="Describe the email you want to write..."></textarea>
-                            <div class="ai-button-group">
-                                <button onclick="generateAIEmail()" class="ai-generate-btn">Generate Email</button>
-                                <button onclick="toggleAIChat()" class="ai-chat-btn">Chat with AI</button>
-                            </div>
-                        </div>
-                        <div id="ai-chat-area" style="display: none;">
+                        <div id="ai-chat-area">
                             <div id="chat-messages" class="chat-messages">
                                 <div class="chat-message ai">
                                     Hello! How can I help you today?
@@ -1146,9 +1138,6 @@
                             <div class="chat-input-area">
                                 <textarea id="chat-input" placeholder="Type your message..."></textarea>
                                 <button onclick="sendChatMessage()" class="ai-send-btn">Send</button>
-                            </div>
-                            <div class="ai-button-group">
-                                <button onclick="toggleAIChat()" class="ai-generate-btn">Generate Email</button>
                             </div>
                         </div>
                     </div>

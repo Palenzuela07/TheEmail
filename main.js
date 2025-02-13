@@ -322,6 +322,9 @@ async function openEmail(emailId) {
     try {
         currentEmail = emailId;
         
+        // Hide email tabs when viewing an email
+        document.getElementById('email-tabs').style.display = 'none';
+
         // Get full email content
         const response = await gapi.client.gmail.users.messages.get({
             'userId': 'me',
@@ -393,6 +396,9 @@ function closeEmail() {
     document.getElementById('email-viewer').style.display = 'none';
     document.getElementById('emailList').style.display = 'block';
     document.getElementById('email-viewer-content').innerHTML = ''; // Clear content
+
+    // Show email tabs when closing an email
+    document.getElementById('email-tabs').style.display = 'flex';
 }
 
 // Add this helper function to properly decode email text
@@ -443,209 +449,7 @@ function deleteEmail(emailId) {
     console.log('Delete functionality coming soon');
 }
 
-async function replyEmail(emailId) {
-    console.log('Replying to email ID:', emailId); // Debugging log
-    try {
-        const response = await gapi.client.gmail.users.messages.get({
-            'userId': 'me',
-            'id': emailId,
-            'format': 'full'
-        });
-
-        const email = response.result;
-        const headers = email.payload.headers;
-
-        // Extract email details
-        const fromHeader = headers.find(header => header.name === 'From')?.value || '';
-        const emailMatch = fromHeader.match(/<(.+?)>/) || fromHeader.match(/[\w.-]+@[\w.-]+\.\w+/);
-        const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
-
-        const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
-        const originalBody = decodeEmailText(email.snippet || '');
-
-        console.log('Reply details:', { replyToEmail, subject, originalBody }); // Debugging log
-
-        // Create a clean prompt for AI
-        const cleanPrompt = `Help me write a response to this email:
-
-From: ${fromHeader}
-Subject: ${subject}
-Content: ${originalBody}`;
-
-        // Open compose modal with reply details
-        openComposeModal({
-            from: replyToEmail,
-            subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-            originalContent: cleanPrompt
-        });
-
-    } catch (error) {
-        console.error('Error preparing reply:', error);
-        alert('Error preparing reply. Please try again.');
-    }
-}
-
-function useAISuggestion(suggestionNum) {
-    const suggestion = document.getElementById(`ai-suggestion-${suggestionNum}`).textContent;
-    document.getElementById('compose-body').value = suggestion;
-}
-
-async function switchTab(category) {
-    console.log(`Switching to ${category} tab`); // Debugging log
-    currentFilter = category;
-
-    // Update the search input placeholder based on the current tab
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.value = ''; // Clear the search input
-        console.log('Search input cleared'); // Debugging log
-        switch (category) {
-            case 'starred':
-                searchInput.placeholder = 'Search starred emails...';
-                break;
-            case 'important':
-                searchInput.placeholder = 'Search important emails...';
-                break;
-            case 'sent':
-                searchInput.placeholder = 'Search sent emails...';
-                break;
-            default:
-                searchInput.placeholder = 'Search emails...';
-        }
-    } else {
-        console.error('Search input element not found');
-    }
-
-    // Update the current filter
-    currentFilter = category;
-    
-    try {
-        // Update active tab
-        document.querySelectorAll('.email-tab, .sub-nav-item').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        document.querySelector(`.email-tab[onclick*="${category}"], .sub-nav-item[onclick*="${category}"]`).classList.add('active');
-
-        // Show loading state
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p>Loading ${category} emails...</p>
-            </div>
-        `;
-
-        // Show or hide category tabs based on the selected tab
-        const emailTabs = document.querySelector('.email-tabs');
-        if (category === 'primary') {
-            emailTabs.style.display = 'flex';
-        } else {
-            emailTabs.style.display = 'none';
-        }
-
-        // Reset page and get initial count
-        currentPage = 1;
-
-        // Use Gmail's native category filter
-        let query;
-        switch (category) {
-            case 'primary':
-                query = 'category:primary';
-                break;
-            case 'promotions':
-                query = 'category:promotions';
-                break;
-            case 'social':
-                query = 'category:social';
-                break;
-            case 'updates':
-                query = 'category:updates';
-                break;
-            case 'starred':
-                query = 'is:starred';
-                break;
-            case 'important':
-                query = 'is:important';
-                break;
-            case 'sent':
-                query = 'in:sent';
-                break;
-            default:
-                query = '';
-        }
-
-        console.log(`Querying emails with: ${query}`);
-
-        // Get initial count of emails
-        const countResponse = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': 500,
-            'q': query
-        });
-        
-        totalEmails = countResponse.result.resultSizeEstimate || 0;
-
-        // Get emails for the current page
-        const response = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': EMAILS_PER_PAGE,
-            'q': query,
-            'orderBy': 'date'
-        });
-
-        if (!response.result.messages) {
-            displayEmails([]);
-            return;
-        }
-
-        const emails = await Promise.all(response.result.messages.map(async message => {
-            const emailDetails = await gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
-            });
-            
-            const headers = emailDetails.result.payload.headers;
-            const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
-            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT'); // Check if the email is important
-
-            return {
-                id: message.id,
-                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred, // Add the isStarred property
-                isImportant // Add the isImportant property
-            };
-        }));
-
-        displayEmails(emails);
-
-    } catch (error) {
-        console.error('Error switching tab:', error);
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error loading emails. Please try again.</p>
-            </div>
-        `;
-    }
-}
-
-function getLabelId(category) {
-    switch (category.toLowerCase()) {
-        case 'primary':
-            return 'CATEGORY_PERSONAL';
-        case 'social':
-            return 'CATEGORY_SOCIAL';
-        case 'promotions':
-            return 'CATEGORY_PROMOTIONS';
-        case 'updates':
-            return 'CATEGORY_UPDATES';
-        default:
-            return 'INBOX';
-    }
-}
-
+// Function to open the compose modal
 function openComposeModal(replyTo = null) {
     const modal = document.getElementById('compose-modal');
     const toField = document.getElementById('compose-to');
@@ -658,22 +462,18 @@ function openComposeModal(replyTo = null) {
         toField.value = replyTo.from;
         subjectField.value = replyTo.subject;
         bodyField.value = ''; // Keep the compose body empty for replies
-        
-        // For replies, pre-fill AI prompt with context
-        document.getElementById('ai-prompt').value = 
-            `Help me write a response to this email:\n\n${replyTo.originalContent}`;
     } else {
         modalTitle.textContent = 'New Message';
         toField.value = '';
         subjectField.value = '';
         bodyField.value = '';
-        document.getElementById('ai-prompt').value = '';
     }
     
     modal.style.display = 'block';
     setTimeout(() => modal.classList.add('show'), 10);
 }
 
+// Function to close the compose modal
 function closeComposeModal() {
     const modal = document.getElementById('compose-modal');
     modal.classList.remove('show');
@@ -681,6 +481,7 @@ function closeComposeModal() {
     setTimeout(() => modal.style.display = 'none', 300);
 }
 
+// Function to send an email
 async function sendEmail() {
     try {
         const to = document.getElementById('compose-to').value;
@@ -734,7 +535,7 @@ async function sendEmail() {
     }
 }
 
-// Update the compose button click handler
+// Ensure the compose button is correctly set up
 document.querySelector('.compose-btn').onclick = () => openComposeModal();
 
 // Helper function to add a timeout to a promise
@@ -1036,5 +837,191 @@ async function toggleStar(emailId, isCurrentlyStarred) {
         console.log(`Email ${emailId} ${labelAction}ed to starred.`);
     } catch (error) {
         console.error('Error toggling star:', error);
+    }
+}
+
+async function replyEmail(emailId) {
+    try {
+        const response = await gapi.client.gmail.users.messages.get({
+            'userId': 'me',
+            'id': emailId,
+            'format': 'full'
+        });
+
+        const email = response.result;
+        const headers = email.payload.headers;
+
+        // Extract email details
+        const fromHeader = headers.find(header => header.name === 'From')?.value || '';
+        const emailMatch = fromHeader.match(/<(.+?)>/) || fromHeader.match(/[\w.-]+@[\w.-]+\.\w+/);
+        const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
+
+        const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
+
+        // Open compose modal with reply details
+        openComposeModal({
+            from: replyToEmail,
+            subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`
+        });
+
+    } catch (error) {
+        console.error('Error preparing reply:', error);
+        alert('Error preparing reply. Please try again.');
+    }
+}
+
+async function switchTab(category) {
+    console.log(`Switching to ${category} tab`); // Debugging log
+    currentFilter = category;
+
+    // Update the search input placeholder based on the current tab
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = ''; // Clear the search input
+        console.log('Search input cleared'); // Debugging log
+        switch (category) {
+            case 'starred':
+                searchInput.placeholder = 'Search starred emails...';
+                break;
+            case 'important':
+                searchInput.placeholder = 'Search important emails...';
+                break;
+            case 'sent':
+                searchInput.placeholder = 'Search sent emails...';
+                break;
+            default:
+                searchInput.placeholder = 'Search emails...';
+        }
+    } else {
+        console.error('Search input element not found');
+    }
+
+    // Update the current filter
+    currentFilter = category;
+    
+    try {
+        // Update active tab
+        document.querySelectorAll('.email-tab, .sub-nav-item').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelector(`.email-tab[onclick*="${category}"], .sub-nav-item[onclick*="${category}"]`).classList.add('active');
+
+        // Show loading state
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Loading ${category} emails...</p>
+            </div>
+        `;
+
+        // Show or hide category tabs based on the selected tab
+        const emailTabs = document.querySelector('.email-tabs');
+        if (category === 'primary') {
+            emailTabs.style.display = 'flex';
+        } else {
+            emailTabs.style.display = 'none';
+        }
+
+        // Reset page and get initial count
+        currentPage = 1;
+
+        // Use Gmail's native category filter
+        let query;
+        switch (category) {
+            case 'primary':
+                query = 'category:primary';
+                break;
+            case 'promotions':
+                query = 'category:promotions';
+                break;
+            case 'social':
+                query = 'category:social';
+                break;
+            case 'updates':
+                query = 'category:updates';
+                break;
+            case 'starred':
+                query = 'is:starred';
+                break;
+            case 'important':
+                query = 'is:important';
+                break;
+            case 'sent':
+                query = 'in:sent';
+                break;
+            default:
+                query = '';
+        }
+
+        console.log(`Querying emails with: ${query}`);
+
+        // Get initial count of emails
+        const countResponse = await gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': 500,
+            'q': query
+        });
+        
+        totalEmails = countResponse.result.resultSizeEstimate || 0;
+
+        // Get emails for the current page
+        const response = await gapi.client.gmail.users.messages.list({
+            'userId': 'me',
+            'maxResults': EMAILS_PER_PAGE,
+            'q': query,
+            'orderBy': 'date'
+        });
+
+        if (!response.result.messages) {
+            displayEmails([]);
+            return;
+        }
+
+        const emails = await Promise.all(response.result.messages.map(async message => {
+            const emailDetails = await gapi.client.gmail.users.messages.get({
+                'userId': 'me',
+                'id': message.id,
+                'format': 'metadata',
+                'metadataHeaders': ['Subject', 'From', 'Date']
+            });
+            
+            const headers = emailDetails.result.payload.headers;
+            const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
+            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT'); // Check if the email is important
+
+            return {
+                id: message.id,
+                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
+                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
+                date: headers.find(header => header.name === 'Date')?.value || '',
+                snippet: emailDetails.result.snippet || 'No preview available',
+                isStarred, // Add the isStarred property
+                isImportant // Add the isImportant property
+            };
+        }));
+
+        displayEmails(emails);
+
+    } catch (error) {
+        console.error('Error switching tab:', error);
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>Error loading emails. Please try again.</p>
+            </div>
+        `;
+    }
+}
+
+function getLabelId(category) {
+    switch (category.toLowerCase()) {
+        case 'primary':
+            return 'CATEGORY_PERSONAL';
+        case 'social':
+            return 'CATEGORY_SOCIAL';
+        case 'promotions':
+            return 'CATEGORY_PROMOTIONS';
+        case 'updates':
+            return 'CATEGORY_UPDATES';
+        default:
+            return 'INBOX';
     }
 }
