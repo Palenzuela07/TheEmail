@@ -91,7 +91,22 @@ async function handleAuthResponse(response) {
     }
 }
 
-async function listEmails(page = 1, filter = 'primary') {
+function isOnline() {
+    return window.navigator.onLine;
+}
+
+async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
+    if (!isOnline()) {
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px; color: #d93025;">
+                <p>No internet connection. Please check your network and try again.</p>
+            </div>
+        `;
+        return [];
+    }
+
+    const MAX_RETRIES = 3; // Maximum number of retry attempts
+
     try {
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px;">
@@ -99,7 +114,6 @@ async function listEmails(page = 1, filter = 'primary') {
             </div>
         `;
 
-        // Use a timeout for the API call
         const response = await withTimeout(
             gapi.client.gmail.users.messages.list({
                 'userId': 'me',
@@ -112,12 +126,7 @@ async function listEmails(page = 1, filter = 'primary') {
         );
 
         if (!response.result.messages) {
-            document.getElementById('emailList').innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <p>No emails found.</p>
-                </div>
-            `;
-            return [];
+            throw new Error('No emails found.');
         }
 
         // Store next page token
@@ -152,6 +161,12 @@ async function listEmails(page = 1, filter = 'primary') {
 
     } catch (error) {
         console.error('Error fetching emails:', error);
+
+        if (retryCount < MAX_RETRIES) {
+            console.log(`Retrying... (${retryCount + 1}/${MAX_RETRIES})`);
+            return listEmails(page, filter, retryCount + 1);
+        }
+
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px; color: #d93025;">
                 <p>Error loading emails. Please try again later.</p>
@@ -888,7 +903,6 @@ async function switchTab(category) {
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = ''; // Clear the search input
-        console.log('Search input cleared'); // Debugging log
         switch (category) {
             case 'starred':
                 searchInput.placeholder = 'Search starred emails...';
@@ -906,9 +920,6 @@ async function switchTab(category) {
         console.error('Search input element not found');
     }
 
-    // Update the current filter
-    currentFilter = category;
-    
     try {
         // Update active tab
         document.querySelectorAll('.email-tab, .sub-nav-item').forEach(tab => {
@@ -966,7 +977,13 @@ async function switchTab(category) {
             'maxResults': 500,
             'q': query
         });
-        
+
+        if (!countResponse.result.messages) {
+            console.warn('No messages found for the query:', query);
+            displayEmails([]);
+            return;
+        }
+
         totalEmails = countResponse.result.resultSizeEstimate || 0;
 
         // Get emails for the current page
@@ -978,6 +995,7 @@ async function switchTab(category) {
         });
 
         if (!response.result.messages) {
+            console.warn('No messages returned for the current page:', currentPage);
             displayEmails([]);
             return;
         }
@@ -991,8 +1009,8 @@ async function switchTab(category) {
             });
             
             const headers = emailDetails.result.payload.headers;
-            const isStarred = emailDetails.result.labelIds.includes('STARRED'); // Check if the email is starred
-            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT'); // Check if the email is important
+            const isStarred = emailDetails.result.labelIds.includes('STARRED');
+            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
 
             return {
                 id: message.id,
@@ -1000,8 +1018,8 @@ async function switchTab(category) {
                 from: headers.find(header => header.name === 'From')?.value || '(no sender)',
                 date: headers.find(header => header.name === 'Date')?.value || '',
                 snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred, // Add the isStarred property
-                isImportant // Add the isImportant property
+                isStarred,
+                isImportant
             };
         }));
 
@@ -1011,7 +1029,7 @@ async function switchTab(category) {
         console.error('Error switching tab:', error);
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error loading emails. Please try again.</p>
+                <p>Error loading emails. Please try again later.</p>
             </div>
         `;
     }
