@@ -556,20 +556,46 @@
         }
 
         .email-tabs {
-            max-width: none;
-            margin: 0 20px 0 20px;
-            border-radius: 0;
-            padding-right: 0;
-            padding-left: 50px;
-            display: none;
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
             border-bottom: 1px solid #dadce0;
             background: white;
             width: calc(100% - 40px);
             box-sizing: border-box;
+            margin: 0 20px;
+            position: relative;
+        }
+
+        .refresh-btn {
+            position: absolute;
+            left: 10px;
+            padding: 12px;
+            cursor: pointer;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: none;
+            border: none;
+        }
+
+        .refresh-btn:hover {
+            background: #f1f3f4;
+        }
+
+        .refresh-icon {
+            font-size: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .refresh-btn:active .refresh-icon {
+            transform: rotate(180deg);
         }
 
         .email-tab {
-            padding: 16px 32px;
+            flex: 1;
+            padding: 16px 0;
             border: none;
             background: none;
             color: #5f6368;
@@ -578,7 +604,9 @@
             position: relative;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
+            margin-left: 60px;
         }
 
         .email-tab:hover {
@@ -714,31 +742,6 @@
         .modal-footer button:last-child {
             background: white;
             border: 1px solid #dadce0;
-        }
-
-        .refresh-btn {
-            background: none;
-            border: none;
-            padding: 8px;
-            cursor: pointer;
-            margin-left: -12px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .refresh-btn:hover {
-            background: #f1f3f4;
-        }
-
-        .refresh-icon {
-            font-size: 16px;
-            transition: transform 0.3s ease;
-        }
-
-        .refresh-btn:active .refresh-icon {
-            transform: rotate(180deg);
         }
 
         .compose-split-view {
@@ -1074,21 +1077,17 @@
                     <button class="refresh-btn" onclick="refreshEmails()">
                         <span class="refresh-icon">🔄</span>
                     </button>
-                    <button class="email-tab active" onclick="switchTab('primary')">
-                        <span class="tab-icon">📥</span>
-                        Inbox
+                    <button class="email-tab" onclick="switchTab('primary')">
+                        <span class="tab-icon">📥</span> Inbox
                     </button>
                     <button class="email-tab" onclick="switchTab('promotions')">
-                        <span class="tab-icon">🏷️</span>
-                        Promotions
+                        <span class="tab-icon">🏷️</span> Promotions
                     </button>
                     <button class="email-tab" onclick="switchTab('social')">
-                        <span class="tab-icon">👥</span>
-                        Social
+                        <span class="tab-icon">👥</span> Social
                     </button>
                     <button class="email-tab" onclick="switchTab('updates')">
-                        <span class="tab-icon">🔄</span>
-                        Updates
+                        <span class="tab-icon">🔄</span> Updates
                     </button>
                 </div>
                 <div id="emailList" class="email-list">

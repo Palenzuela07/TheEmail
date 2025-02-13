@@ -870,9 +870,19 @@ async function replyEmail(emailId) {
     }
 }
 
+function ensureTabsVisible() {
+    const emailTabs = document.querySelector('.email-tabs');
+    if (emailTabs) {
+        emailTabs.style.display = 'flex'; // Ensure tabs are visible
+    }
+}
+
 async function switchTab(category) {
-    console.log(`Switching to ${category} tab`); // Debugging log
+    console.log(`Switching to ${category} tab`);
     currentFilter = category;
+
+    // Ensure tabs are visible
+    ensureTabsVisible();
 
     // Update the search input placeholder based on the current tab
     const searchInput = document.getElementById('search-input');
@@ -913,13 +923,9 @@ async function switchTab(category) {
             </div>
         `;
 
-        // Show or hide category tabs based on the selected tab
+        // Ensure email tabs are always visible
         const emailTabs = document.querySelector('.email-tabs');
-        if (category === 'primary') {
-            emailTabs.style.display = 'flex';
-        } else {
-            emailTabs.style.display = 'none';
-        }
+        emailTabs.style.display = 'flex';
 
         // Reset page and get initial count
         currentPage = 1;
