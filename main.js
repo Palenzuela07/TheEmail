@@ -917,16 +917,16 @@ async function switchTab(category) {
         searchInput.value = ''; // Clear the search input
         switch (category) {
             case 'starred':
-                searchInput.placeholder = 'Search starred emails...';
-                break;
             case 'important':
-                searchInput.placeholder = 'Search important emails...';
-                break;
             case 'sent':
-                searchInput.placeholder = 'Search sent emails...';
+                searchInput.placeholder = `Search ${category} emails...`;
+                // Hide category tabs when in sub-tabs
+                document.querySelector('.email-tabs').style.display = 'none';
                 break;
             default:
                 searchInput.placeholder = 'Search emails...';
+                // Show category tabs for main categories
+                document.querySelector('.email-tabs').style.display = 'flex';
         }
     } else {
         console.error('Search input element not found');
@@ -945,10 +945,6 @@ async function switchTab(category) {
                 <p>Loading ${category} emails...</p>
             </div>
         `;
-
-        // Ensure email tabs are always visible
-        const emailTabs = document.querySelector('.email-tabs');
-        emailTabs.style.display = 'flex';
 
         // Reset page and get initial count
         currentPage = 1;
