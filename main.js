@@ -86,6 +86,12 @@ async function handleAuthResponse(response) {
         // Switch to primary tab immediately after login
         await switchTab('primary');
         
+        // Automatically refresh emails after login
+        refreshEmails();
+        
+        // Simulate a click on the refresh button
+        document.querySelector('.refresh-btn').click();
+        
     } catch (error) {
         console.error('Error:', error);
     }
@@ -119,7 +125,7 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
                 'userId': 'me',
                 'maxResults': EMAILS_PER_PAGE,
                 'q': `category:${filter}`,
-                'pageToken': page === 1 ? undefined : pageTokens[page],
+                'pageToken': pageTokens[page] || undefined,
                 'orderBy': 'date'
             }),
             10000 // 10-second timeout
@@ -132,6 +138,11 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
         // Store next page token
         if (response.result.nextPageToken) {
             pageTokens[page + 1] = response.result.nextPageToken;
+            console.log(`Stored nextPageToken for page ${page + 1}`);
+        } else {
+            // Clear the next page token if it doesn't exist
+            delete pageTokens[page + 1];
+            console.log(`No nextPageToken for page ${page + 1}`);
         }
 
         const emails = await Promise.all(response.result.messages.map(async message => {
@@ -315,21 +326,22 @@ function generatePaginationControls(currentPage, totalPages) {
 }
 
 async function changePage(newPage) {
-    if (newPage < 1 || newPage > Math.ceil(totalEmails / EMAILS_PER_PAGE)) return;
-    
+    if (newPage < 1) return;
+
     try {
-        currentPage = newPage;
-        // Use the current filter to fetch emails
-        const emails = await listEmails(currentPage, currentFilter);
+        // Attempt to fetch emails for the new page
+        const emails = await listEmails(newPage, currentFilter);
         if (emails.length > 0) {
+            currentPage = newPage; // Only update currentPage if emails are successfully fetched
             displayEmails(emails);
-            // Scroll to top of email list
             document.getElementById('emailList').scrollTop = 0;
         } else {
             console.error('No emails returned for page:', newPage);
+            alert('No emails found for this page.');
         }
     } catch (error) {
         console.error('Error changing page:', error);
+        alert('Error loading emails. Please try again.');
     }
 }
 
