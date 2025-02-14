@@ -1056,6 +1056,9 @@ async function switchTab(category) {
 
         displayEmails(emails);
 
+        // Automatically refresh emails after switching tabs
+        refreshEmails();
+
     } catch (error) {
         console.error('Error switching tab:', error);
         document.getElementById('emailList').innerHTML = `
