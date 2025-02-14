@@ -120,11 +120,13 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
             </div>
         `;
 
+        const query = getQueryForFilter(filter);
+
         const response = await withTimeout(
             gapi.client.gmail.users.messages.list({
                 'userId': 'me',
                 'maxResults': EMAILS_PER_PAGE,
-                'q': `category:${filter}`,
+                'q': query,
                 'pageToken': pageTokens[page] || undefined,
                 'orderBy': 'date'
             }),
@@ -184,6 +186,27 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
             </div>
         `;
         return [];
+    }
+}
+
+function getQueryForFilter(filter) {
+    switch (filter) {
+        case 'starred':
+            return 'is:starred';
+        case 'important':
+            return 'is:important';
+        case 'sent':
+            return 'in:sent';
+        case 'primary':
+            return 'category:primary';
+        case 'promotions':
+            return 'category:promotions';
+        case 'social':
+            return 'category:social';
+        case 'updates':
+            return 'category:updates';
+        default:
+            return '';
     }
 }
 
