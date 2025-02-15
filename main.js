@@ -492,6 +492,18 @@ async function switchSection(section) {
     const emailTabs = document.querySelector('.email-tabs');
     emailTabs.style.display = 'flex';
     
+    // Hide AI Settings if visible
+    const settingsContainer = document.getElementById('ai-settings-container');
+    if (settingsContainer) {
+        settingsContainer.style.display = 'none';
+    }
+    
+    // Update active states
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    
     // Switch to primary tab immediately
     await switchTab('primary');
 }
@@ -1037,8 +1049,26 @@ async function switchTab(category) {
     console.log(`Switching to ${category} tab`);
     currentFilter = category;
 
-    // Ensure tabs are visible
-    ensureTabsVisible();
+    // Hide AI Settings if visible
+    const settingsContainer = document.getElementById('ai-settings-container');
+    if (settingsContainer) {
+        settingsContainer.style.display = 'none';
+    }
+
+    // Show search bar and email tabs
+    document.querySelector('.search-bar').style.display = 'flex';
+    document.querySelector('.email-tabs').style.display = 'flex';
+
+    // Update active states
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    if (category === 'primary') {
+        document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    } else {
+        document.querySelector(`.sub-nav-item[onclick*="${category}"]`)?.classList.add('active');
+    }
 
     // Update the search input placeholder based on the current tab
     const searchInput = document.getElementById('search-input');
@@ -1062,12 +1092,6 @@ async function switchTab(category) {
     }
 
     try {
-        // Update active tab
-        document.querySelectorAll('.email-tab, .sub-nav-item').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        document.querySelector(`.email-tab[onclick*="${category}"], .sub-nav-item[onclick*="${category}"]`).classList.add('active');
-
         // Show loading state
         document.getElementById('emailList').innerHTML = `
             <div style="text-align: center; padding: 20px;">
@@ -1188,4 +1212,58 @@ function getLabelId(category) {
         default:
             return 'INBOX';
     }
+}
+
+// Add this function to handle AI settings click
+function openAISettings() {
+    // Hide email list, viewer, tabs, and search bar
+    document.getElementById('emailList').style.display = 'none';
+    document.getElementById('email-viewer').style.display = 'none';
+    document.getElementById('email-tabs').style.display = 'none';
+    document.querySelector('.search-bar').style.display = 'none';
+    
+    // Get or create settings container
+    let settingsContainer = document.getElementById('ai-settings-container');
+    if (!settingsContainer) {
+        settingsContainer = document.createElement('div');
+        settingsContainer.id = 'ai-settings-container';
+        document.querySelector('.main-content').appendChild(settingsContainer);
+    }
+    
+    // Update settings content without back button
+    settingsContainer.innerHTML = `
+        <div class="settings-header">
+            <h2>AI Settings</h2>
+        </div>
+        <div class="settings-content">
+            <p>AI Settings page - Coming soon</p>
+        </div>
+    `;
+    
+    settingsContainer.style.display = 'block';
+    
+    // Update active state in navigation
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector('.nav-item[onclick*="openAISettings"]').classList.add('active');
+}
+
+function closeAISettings() {
+    // Hide settings container
+    const settingsContainer = document.getElementById('ai-settings-container');
+    if (settingsContainer) {
+        settingsContainer.style.display = 'none';
+    }
+    
+    // Show email list, tabs, and search bar
+    document.getElementById('emailList').style.display = 'block';
+    document.getElementById('email-tabs').style.display = 'flex';
+    document.querySelector('.search-bar').style.display = 'flex';
+    
+    // Reset active state in navigation
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
 }
