@@ -710,7 +710,7 @@
             width: 95%;
             padding: 8px;
             margin-top: 0 !important;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             border: 1px solid #dadce0;
             border-radius: 4px;
             font-size: 14px;
@@ -757,6 +757,7 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            height: 100%;
         }
 
         .compose-area {
@@ -764,6 +765,7 @@
             padding-left: 32px;
             padding-right: 16px;
             position: relative;
+            height: 100%;
         }
 
         .compose-area::before {
@@ -802,7 +804,7 @@
         }
 
         #compose-body {
-            height: 100%;
+            height: calc(100% - 30px);
         }
 
         .modal {
@@ -860,12 +862,12 @@
         }
 
         .chat-messages {
-            height: 200px;
+            flex: 1;
             overflow-y: auto;
             padding: 16px;
-            background: #f8f9fa;
+            background: #ffffff;
             border-radius: 4px;
-            margin-bottom: 12px;
+            margin-bottom: 60px;
         }
 
         .chat-message {
@@ -891,7 +893,16 @@
         .chat-input-area {
             display: flex;
             gap: 8px;
-            align-items: stretch;
+            align-items: center;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            box-sizing: border-box;
+            position: absolute;
+            bottom: 0;
+            left: 16px;
+            right: 16px;
+            border-top: 1px solid #dadce0;
+            width: calc(100% - 32px);
         }
 
         #chat-input {
@@ -903,10 +914,12 @@
             border-radius: 4px;
             font-size: 14px;
             box-sizing: border-box;
+            max-width: calc(100% - 76px);
         }
 
         .ai-send-btn {
-            padding: 6px 16px;
+            width: 60px;
+            padding: 6px 12px;
             background: #1a73e8;
             color: white;
             border: none;
@@ -1037,6 +1050,54 @@
         .search-bar button:hover {
             background: #e8f0fe;
             border-radius: 50%;
+        }
+
+        #ai-chat-area {
+            position: relative;
+            height: calc(100% - 30px);
+            border: 2px solid #1a73e8;
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            background: #ffffff;
+            border-radius: 4px;
+            margin-bottom: 60px;
+        }
+
+        .chat-input-area {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            box-sizing: border-box;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            border-top: 1px solid #dadce0;
+            width: 100%;
+        }
+
+        #chat-input {
+            flex: 1;
+            height: 32px;
+            resize: none;
+            padding: 6px 8px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            width: calc(100% - 76px);
         }
     </style>
 </head>

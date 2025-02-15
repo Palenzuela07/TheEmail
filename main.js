@@ -760,6 +760,9 @@ function sendChatMessage() {
         </div>
     `;
     input.value = ''; // Clear input field
+    
+    // Scroll to bottom after user message
+    messages.scrollTop = messages.scrollHeight;
 
     // Simulate AI response
     setTimeout(() => {
@@ -768,7 +771,8 @@ function sendChatMessage() {
                 I'm here to help! What would you like to know?
             </div>
         `;
-        messages.scrollTop = messages.scrollHeight; // Scroll to the bottom
+        // Scroll to bottom after AI response
+        messages.scrollTop = messages.scrollHeight;
     }, 1000);
 }
 
