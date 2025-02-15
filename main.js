@@ -1055,8 +1055,9 @@ async function switchTab(category) {
         settingsContainer.style.display = 'none';
     }
 
-    // Show search bar and email tabs
+    // Show search bar and email list
     document.querySelector('.search-bar').style.display = 'flex';
+    document.getElementById('emailList').style.display = 'block';
     document.querySelector('.email-tabs').style.display = 'flex';
 
     // Update active states
@@ -1067,28 +1068,27 @@ async function switchTab(category) {
     if (category === 'primary') {
         document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
     } else {
-        document.querySelector(`.sub-nav-item[onclick*="${category}"]`)?.classList.add('active');
+        const subNavItem = document.querySelector(`.sub-nav-item[onclick*="${category}"]`);
+        if (subNavItem) {
+            subNavItem.classList.add('active');
+        }
     }
 
     // Update the search input placeholder based on the current tab
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
-        searchInput.value = ''; // Clear the search input
+        searchInput.value = '';
         switch (category) {
             case 'starred':
             case 'important':
             case 'sent':
                 searchInput.placeholder = `Search ${category} emails...`;
-                // Hide category tabs when in sub-tabs
                 document.querySelector('.email-tabs').style.display = 'none';
                 break;
             default:
                 searchInput.placeholder = 'Search emails...';
-                // Show category tabs for main categories
                 document.querySelector('.email-tabs').style.display = 'flex';
         }
-    } else {
-        console.error('Search input element not found');
     }
 
     try {
@@ -1105,18 +1105,6 @@ async function switchTab(category) {
         // Use Gmail's native category filter
         let query;
         switch (category) {
-            case 'primary':
-                query = 'category:primary';
-                break;
-            case 'promotions':
-                query = 'category:promotions';
-                break;
-            case 'social':
-                query = 'category:social';
-                break;
-            case 'updates':
-                query = 'category:updates';
-                break;
             case 'starred':
                 query = 'is:starred';
                 break;
@@ -1127,7 +1115,7 @@ async function switchTab(category) {
                 query = 'in:sent';
                 break;
             default:
-                query = '';
+                query = `category:${category}`;
         }
 
         console.log(`Querying emails with: ${query}`);
@@ -1242,8 +1230,8 @@ function openAISettings() {
     
     settingsContainer.style.display = 'block';
     
-    // Update active state in navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
+    // Update active state in navigation - include both nav-item and sub-nav-item
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
         item.classList.remove('active');
     });
     document.querySelector('.nav-item[onclick*="openAISettings"]').classList.add('active');
