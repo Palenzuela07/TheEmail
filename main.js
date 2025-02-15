@@ -868,6 +868,30 @@ async function sendChatMessage() {
             </div>
         `;
         
+        // Check if the user asked the AI to write an email
+        if (userMessage.toLowerCase().includes('write an email')) {
+            // Generate a specific email based on the user's request
+            const emailPrompt = `Write an email to my boss saying: ${userMessage}`;
+            const emailResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-3.5-turbo",
+                    messages: [{
+                        role: "user",
+                        content: emailPrompt
+                    }],
+                    temperature: 0.7
+                })
+            });
+
+            const emailData = await emailResponse.json();
+            document.getElementById('compose-body').value = emailData.choices[0].message.content;
+        }
+        
         // Scroll to bottom after AI response
         messages.scrollTop = messages.scrollHeight;
 
