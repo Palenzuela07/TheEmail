@@ -499,6 +499,16 @@ function deleteEmail(emailId) {
     console.log('Delete functionality coming soon');
 }
 
+// Function to reset AI chat
+function resetAIChat() {
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.innerHTML = `
+        <div class="chat-message ai">
+            Hello! How can I help you with your email today?
+        </div>
+    `;
+}
+
 // Function to open the compose modal
 function openComposeModal(replyTo = null) {
     const modal = document.getElementById('compose-modal');
@@ -507,11 +517,14 @@ function openComposeModal(replyTo = null) {
     const bodyField = document.getElementById('compose-body');
     const modalTitle = modal.querySelector('.modal-header h2');
     
+    // Reset AI chat
+    resetAIChat();
+    
     if (replyTo) {
         modalTitle.textContent = 'Reply';
         toField.value = replyTo.from;
         subjectField.value = replyTo.subject;
-        bodyField.value = ''; // Keep the compose body empty for replies
+        bodyField.value = '';
     } else {
         modalTitle.textContent = 'New Message';
         toField.value = '';
