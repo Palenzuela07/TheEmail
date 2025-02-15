@@ -8,6 +8,7 @@ const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapi
 
 // Add this at the top with other constants
 const OPENAI_API_KEY = 'REDACTED_OPENAI_API_KEY';
+let conversationHistory = [];
 
 let tokenClient;
 let gapiInited = false;
@@ -504,12 +505,28 @@ function resetAIChat() {
     const chatMessages = document.getElementById('chat-messages');
     chatMessages.innerHTML = `
         <div class="chat-message ai">
-            Hello! How can I help you with your email today?
+            How can I help you?
         </div>
     `;
+    // Reset conversation history
+    conversationHistory = [{
+        role: "system",
+        content: "You are a helpful AI assistant. Provide clear and concise responses to user questions. Be friendly and professional."
+    }, {
+        role: "assistant",
+        content: "How can I help you?"
+    }];
 }
 
-// Function to open the compose modal
+// Add this function to handle the keypress event
+function handleChatKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault(); // Prevent default newline
+        sendChatMessage();
+    }
+}
+
+// Update the openComposeModal function to add the event listener
 function openComposeModal(replyTo = null) {
     const modal = document.getElementById('compose-modal');
     const toField = document.getElementById('compose-to');
@@ -519,6 +536,10 @@ function openComposeModal(replyTo = null) {
     
     // Reset AI chat
     resetAIChat();
+    
+    // Add event listener for Enter key in chat input
+    const chatInput = document.getElementById('chat-input');
+    chatInput.addEventListener('keypress', handleChatKeyPress);
     
     if (replyTo) {
         modalTitle.textContent = 'Reply';
@@ -536,11 +557,13 @@ function openComposeModal(replyTo = null) {
     setTimeout(() => modal.classList.add('show'), 10);
 }
 
-// Function to close the compose modal
+// Update closeComposeModal to remove the event listener
 function closeComposeModal() {
     const modal = document.getElementById('compose-modal');
+    const chatInput = document.getElementById('chat-input');
+    chatInput.removeEventListener('keypress', handleChatKeyPress);
+    
     modal.classList.remove('show');
-    // Wait for animation to finish before hiding
     setTimeout(() => modal.style.display = 'none', 300);
 }
 
@@ -759,14 +782,14 @@ function toggleAIChat() {
     }
 }
 
-function sendChatMessage() {
+async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const messages = document.getElementById('chat-messages');
     const userMessage = input.value.trim();
     
     if (!userMessage) return;
     
-    // Add user message
+    // Add user message to UI
     messages.innerHTML += `
         <div class="chat-message user">
             ${userMessage}
@@ -774,19 +797,85 @@ function sendChatMessage() {
     `;
     input.value = ''; // Clear input field
     
+    // Add user message to conversation history
+    conversationHistory.push({
+        role: "user",
+        content: userMessage
+    });
+    
     // Scroll to bottom after user message
     messages.scrollTop = messages.scrollHeight;
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+        // Show loading state
         messages.innerHTML += `
-            <div class="chat-message ai">
-                I'm here to help! What would you like to know?
+            <div class="chat-message ai" id="loading-message">
+                <em>Typing...</em>
             </div>
         `;
+        messages.scrollTop = messages.scrollHeight;
+
+        // Call OpenAI API with full conversation history
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: conversationHistory,
+                temperature: 0.7
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error?.message || 'API request failed');
+        }
+
+        const aiResponse = data.choices[0].message.content;
+        
+        // Add AI response to conversation history
+        conversationHistory.push({
+            role: "assistant",
+            content: aiResponse
+        });
+        
+        // Remove loading message
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
+
+        // Add AI response to UI
+        messages.innerHTML += `
+            <div class="chat-message ai">
+                ${aiResponse}
+            </div>
+        `;
+        
         // Scroll to bottom after AI response
         messages.scrollTop = messages.scrollHeight;
-    }, 1000);
+
+    } catch (error) {
+        console.error('Error getting AI response:', error);
+        
+        // Remove loading message
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
+
+        // Show error message
+        messages.innerHTML += `
+            <div class="chat-message ai">
+                Sorry, I encountered an error. Please try again.
+            </div>
+        `;
+        messages.scrollTop = messages.scrollHeight;
+    }
 }
 
 async function performSearch() {
