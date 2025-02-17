@@ -794,6 +794,7 @@ function toggleAIChat() {
     }
 }
 
+// Update the sendChatMessage function to better handle responses
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const messages = document.getElementById('chat-messages');
@@ -809,15 +810,31 @@ async function sendChatMessage() {
     `;
     input.value = ''; // Clear input field
     
-    // Add user message to conversation history
-    conversationHistory.push({
-        role: "user",
-        content: userMessage
-    });
+    // More sophisticated intent detection
+    const intent = detectUserIntent(userMessage.toLowerCase());
     
-    // Scroll to bottom after user message
-    messages.scrollTop = messages.scrollHeight;
-
+    if (intent.type === 'confirm') {
+        handleConfirmedAction(intent.action, messages);
+        return;
+    }
+    
+    if (intent.type === 'move_to_compose') {
+        if (intent.confidence === 'high') {
+            // Find and move the last AI message
+            moveLastAIMessageToCompose(messages);
+        } else {
+            // Ask for confirmation
+            messages.innerHTML += `
+                <div class="chat-message ai">
+                    Would you like me to move this response to the compose area? Please reply with "yes" to confirm or "no" to keep discussing.
+                </div>
+            `;
+        }
+        messages.scrollTop = messages.scrollHeight;
+        return;
+    }
+    
+    // Continue with regular chat functionality
     try {
         // Show loading state
         messages.innerHTML += `
@@ -826,6 +843,12 @@ async function sendChatMessage() {
             </div>
         `;
         messages.scrollTop = messages.scrollHeight;
+
+        // Add user message to conversation history
+        conversationHistory.push({
+            role: "user",
+            content: userMessage
+        });
 
         // Call OpenAI API with full conversation history
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -867,34 +890,6 @@ async function sendChatMessage() {
                 ${aiResponse}
             </div>
         `;
-        
-        // Check if the user asked the AI to write an email
-        if (userMessage.toLowerCase().includes('write an email')) {
-            // Generate a specific email based on the user's request
-            const emailPrompt = `Write an email to my boss saying: ${userMessage}`;
-            const emailResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${OPENAI_API_KEY}`
-                },
-                body: JSON.stringify({
-                    model: "gpt-3.5-turbo",
-                    messages: [{
-                        role: "user",
-                        content: emailPrompt
-                    }],
-                    temperature: 0.7
-                })
-            });
-
-            const emailData = await emailResponse.json();
-            document.getElementById('compose-body').value = emailData.choices[0].message.content;
-        }
-        
-        // Scroll to bottom after AI response
-        messages.scrollTop = messages.scrollHeight;
-
     } catch (error) {
         console.error('Error getting AI response:', error);
         
@@ -910,8 +905,132 @@ async function sendChatMessage() {
                 Sorry, I encountered an error. Please try again.
             </div>
         `;
-        messages.scrollTop = messages.scrollHeight;
     }
+    
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function detectUserIntent(message) {
+    // Common negative responses
+    const negativePatterns = [
+        /^(no|nah|nope)/i,
+        /not (yet|now|really)/i,
+        /make (some|a few|more) changes/i,
+        /can you (change|modify|update|revise)/i,
+        /let'?s (change|modify|update|revise)/i,
+        /needs? (some|a few|more) changes/i
+    ];
+
+    for (const pattern of negativePatterns) {
+        if (pattern.test(message)) {
+            return { type: 'chat', confidence: 'high' };
+        }
+    }
+
+    // Natural language positive responses
+    const positivePatterns = [
+        // Direct yes variations
+        /^(yes|yea|yeah|yup|sure|ok|okay)/i,
+        
+        // Positive phrases with "fine"
+        /(that'?s |it'?s |looks |seems )?(fine|good|great|perfect)( to me| with me)?/i,
+        
+        // Approval phrases
+        /i like it/i,
+        /works? for me/i,
+        /go (ahead|for it)/i,
+        /move it/i,
+        /use (it|that|this)/i,
+        
+        // Positive with modifications
+        /yes,? but/i,
+        /yeah,? that/i,
+        /fine,? just/i
+    ];
+
+    for (const pattern of positivePatterns) {
+        if (pattern.test(message)) {
+            // If the message contains any modifiers or conditions, treat as chat
+            if (message.includes('if') || 
+                message.includes('but') || 
+                message.includes('maybe') || 
+                message.includes('could') ||
+                message.includes('should')) {
+                return { type: 'chat', confidence: 'high' };
+            }
+            return { type: 'confirm', action: 'move', confidence: 'high' };
+        }
+    }
+
+    // Default to chat for any other responses
+    return { type: 'chat', confidence: 'high' };
+}
+
+function handleConfirmedAction(action, messages) {
+    if (action === 'move') {
+        // First move the content
+        const success = moveLastAIMessageToCompose(messages);
+        
+        // Only show confirmation if we successfully moved content
+        if (success) {
+            messages.innerHTML += `
+                <div class="chat-message ai">
+                    I've moved the response to the compose area. Let me know if you need any changes!
+                </div>
+            `;
+            messages.scrollTop = messages.scrollHeight;
+            return; // Return early to prevent additional messages
+        } else {
+            messages.innerHTML += `
+                <div class="chat-message ai">
+                    I couldn't find the last response to move. Would you like me to generate a new one?
+                </div>
+            `;
+        }
+    }
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function moveLastAIMessageToCompose(messages) {
+    const aiMessages = messages.querySelectorAll('.chat-message.ai');
+    let emailContent = null;
+    let foundQuestion = false;
+    
+    // First pass: find the confirmation question
+    for (let i = aiMessages.length - 1; i >= 0; i--) {
+        const message = aiMessages[i];
+        if (message.textContent.includes('Is this reply good to move to compose')) {
+            foundQuestion = true;
+            // The email content should be the message right before this question
+            if (i > 0) {
+                emailContent = aiMessages[i - 1];
+            }
+            break;
+        }
+    }
+    
+    if (emailContent && foundQuestion) {
+        document.getElementById('compose-body').value = emailContent.textContent;
+        return true;
+    }
+    
+    // Fallback: look for the last non-system message if we didn't find the specific pattern
+    for (let i = aiMessages.length - 1; i >= 0; i--) {
+        const message = aiMessages[i];
+        // Skip all system messages and questions
+        if (!message.textContent.includes('Would you like') && 
+            !message.textContent.includes('I\'ve moved') &&
+            !message.textContent.includes('Okay, let me know') &&
+            !message.textContent.includes('Great! If you have') &&
+            !message.textContent.includes('Is this reply good') &&
+            !message.textContent.includes('Typing...')) {
+            
+            document.getElementById('compose-body').value = message.textContent;
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 async function performSearch() {
@@ -1070,17 +1189,13 @@ async function replyEmail(emailId) {
         // Generate AI response
         const aiResponse = await generateAIReply(emailBody);
 
-        // Replace loading message with AI response
+        // Replace loading message with AI response and new question
         messages.innerHTML = `
             <div class="chat-message ai">
                 ${aiResponse}
             </div>
-        `;
-
-        // Add follow-up message
-        messages.innerHTML += `
             <div class="chat-message ai">
-                Is this reply good to go, or would you like to make changes?
+                Is this reply good to move to compose, or would you like me to make more changes?
             </div>
         `;
         messages.scrollTop = messages.scrollHeight;
