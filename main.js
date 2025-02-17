@@ -1033,6 +1033,13 @@ async function toggleStar(emailId, isCurrentlyStarred) {
 }
 
 async function replyEmail(emailId) {
+    // Open the compose modal immediately
+    openComposeModal();
+
+    // Show a loading indicator in the compose modal
+    const bodyField = document.getElementById('compose-body');
+    bodyField.value = 'Loading...';
+
     try {
         const response = await gapi.client.gmail.users.messages.get({
             'userId': 'me',
@@ -1049,17 +1056,87 @@ async function replyEmail(emailId) {
         const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
 
         const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
+        const emailBody = getBody(email.payload);
 
-        // Open compose modal with reply details
-        openComposeModal({
-            from: replyToEmail,
-            subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`
-        });
+        // Update the compose modal with email details
+        document.getElementById('compose-to').value = replyToEmail;
+        document.getElementById('compose-subject').value = `Re: ${subject}`;
+
+        // Generate AI response
+        const aiResponse = await generateAIReply(emailBody);
+
+        // Display AI response in chatbox
+        const messages = document.getElementById('chat-messages');
+        messages.innerHTML += `
+            <div class="chat-message ai">
+                ${aiResponse}
+                <br><br>
+                Do you want to move this to the compose window?
+                <button onclick="moveToCompose('${aiResponse}')">Yes</button>
+                <button>No</button>
+            </div>
+        `;
+        messages.scrollTop = messages.scrollHeight;
+
+        // Clear the loading indicator
+        bodyField.value = '';
 
     } catch (error) {
         console.error('Error preparing reply:', error);
         alert('Error preparing reply. Please try again.');
+        bodyField.value = ''; // Clear the loading indicator on error
     }
+}
+
+function getBody(payload) {
+    let content = '';
+    if (payload.parts) {
+        for (let part of payload.parts) {
+            if (part.mimeType === 'text/plain' && part.body.data) {
+                content += decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
+            }
+            if (part.parts) {
+                content += getBody(part);
+            }
+        }
+    } else if (payload.body.data) {
+        content = decodeURIComponent(escape(atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
+    }
+    return content;
+}
+
+async function generateAIReply(emailBody) {
+    try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: "gpt-3.5-turbo",
+                messages: [{
+                    role: "system",
+                    content: "You are an email assistant. Generate a polite and professional reply."
+                }, {
+                    role: "user",
+                    content: `Reply to this email: ${emailBody}`
+                }],
+                temperature: 0.7
+            })
+        });
+
+        const data = await response.json();
+        return data.choices[0].message.content;
+    } catch (error) {
+        console.error('Error generating AI reply:', error);
+        return 'Error generating reply. Please try again.';
+    }
+}
+
+function moveToCompose(aiResponse) {
+    document.getElementById('compose-body').value = aiResponse;
+    openComposeModal();
 }
 
 function ensureTabsVisible() {
