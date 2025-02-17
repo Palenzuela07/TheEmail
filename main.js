@@ -1036,9 +1036,14 @@ async function replyEmail(emailId) {
     // Open the compose modal immediately
     openComposeModal();
 
-    // Show a loading indicator in the compose modal
-    const bodyField = document.getElementById('compose-body');
-    bodyField.value = 'Loading...';
+    // Show a loading indicator in the AI chatbox
+    const messages = document.getElementById('chat-messages');
+    messages.innerHTML = `
+        <div class="chat-message ai">
+            <em>Generating reply...</em>
+        </div>
+    `;
+    messages.scrollTop = messages.scrollHeight;
 
     try {
         const response = await gapi.client.gmail.users.messages.get({
@@ -1065,26 +1070,52 @@ async function replyEmail(emailId) {
         // Generate AI response
         const aiResponse = await generateAIReply(emailBody);
 
-        // Display AI response in chatbox
-        const messages = document.getElementById('chat-messages');
-        messages.innerHTML += `
+        // Replace loading message with AI response
+        messages.innerHTML = `
             <div class="chat-message ai">
                 ${aiResponse}
-                <br><br>
-                Do you want to move this to the compose window?
-                <button onclick="moveToCompose('${aiResponse}')">Yes</button>
-                <button>No</button>
+            </div>
+        `;
+
+        // Add follow-up message
+        messages.innerHTML += `
+            <div class="chat-message ai">
+                Is this reply good to go, or would you like to make changes?
             </div>
         `;
         messages.scrollTop = messages.scrollHeight;
 
-        // Clear the loading indicator
-        bodyField.value = '';
+        // Listen for user input
+        const chatInput = document.getElementById('chat-input');
+        chatInput.addEventListener('keypress', function handleUserResponse(event) {
+            if (event.key === 'Enter') {
+                const userResponse = chatInput.value.trim().toLowerCase();
+                console.log('User response:', userResponse); // Debugging log
+                chatInput.value = ''; // Clear input field
+
+                if (userResponse.includes('yes') || userResponse.includes('good') || userResponse.includes('move')) {
+                    console.log('Moving AI response to compose window'); // Debugging log
+                    moveToCompose(aiResponse);
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            Great! I've moved the reply to the compose window.
+                        </div>
+                    `;
+                } else {
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            Okay, let me know if you need any changes.
+                        </div>
+                    `;
+                }
+                messages.scrollTop = messages.scrollHeight;
+                chatInput.removeEventListener('keypress', handleUserResponse); // Remove listener after handling
+            }
+        });
 
     } catch (error) {
         console.error('Error preparing reply:', error);
         alert('Error preparing reply. Please try again.');
-        bodyField.value = ''; // Clear the loading indicator on error
     }
 }
 
@@ -1135,8 +1166,23 @@ async function generateAIReply(emailBody) {
 }
 
 function moveToCompose(aiResponse) {
+    console.log('Setting compose body with AI response'); // Debugging log
     document.getElementById('compose-body').value = aiResponse;
-    openComposeModal();
+    // Ensure the compose modal is open
+    const modal = document.getElementById('compose-modal');
+    if (!modal.classList.contains('show')) {
+        openComposeModal();
+    }
+}
+
+// Utility function to escape HTML
+function escapeHtml(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 function ensureTabsVisible() {
