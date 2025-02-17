@@ -978,8 +978,6 @@ function handleConfirmedAction(action, messages) {
                     I've moved the response to the compose area. Let me know if you need any changes!
                 </div>
             `;
-            messages.scrollTop = messages.scrollHeight;
-            return; // Return early to prevent additional messages
         } else {
             messages.innerHTML += `
                 <div class="chat-message ai">
