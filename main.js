@@ -890,6 +890,16 @@ async function sendChatMessage() {
                 ${aiResponse}
             </div>
         `;
+
+        // If the response looks like an email, ask for confirmation
+        if (isEmailContent(aiResponse)) {
+            messages.innerHTML += `
+                <div class="chat-message ai">
+                    Is this email good to move to compose, or would you like me to make changes?
+                </div>
+            `;
+        }
+
     } catch (error) {
         console.error('Error getting AI response:', error);
         
@@ -1334,7 +1344,7 @@ async function switchTab(category) {
         }
     }
 
-    // Update the search input placeholder based on the current tab
+    // Update search placeholder
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.value = '';
@@ -1351,114 +1361,98 @@ async function switchTab(category) {
         }
     }
 
-    try {
-        // Show loading state
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p>Loading ${category} emails...</p>
-            </div>
-        `;
+    // Show loading state once
+    document.getElementById('emailList').innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <p>Loading ${category} emails...</p>
+        </div>
+    `;
 
-        // Reset page and get initial count
-        currentPage = 1;
+    let retryCount = 0;
+    const maxRetries = 3;
+    let success = false;
 
-        // Use Gmail's native category filter
-        let query;
-        switch (category) {
-            case 'starred':
-                query = 'is:starred';
-                break;
-            case 'important':
-                query = 'is:important';
-                break;
-            case 'sent':
-                query = 'in:sent';
-                break;
-            default:
-                query = `category:${category}`;
-        }
+    while (retryCount < maxRetries && !success) {
+        try {
+            currentPage = 1;
+            const query = getQueryForCategory(category);
+            console.log(`Attempt ${retryCount + 1}: Querying emails with: ${query}`);
 
-        console.log(`Querying emails with: ${query}`);
+            // Get both the count and the latest emails in one attempt
+            const [countResponse, emailsResponse] = await Promise.all([
+                gapi.client.gmail.users.messages.list({
+                    'userId': 'me',
+                    'maxResults': 500,
+                    'q': query
+                }),
+                gapi.client.gmail.users.messages.list({
+                    'userId': 'me',
+                    'maxResults': EMAILS_PER_PAGE,
+                    'q': query,
+                    'orderBy': 'date'
+                })
+            ]);
 
-        // Get initial count of emails
-        const countResponse = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': 500,
-            'q': query
-        });
+            if (!countResponse.result.messages || !emailsResponse.result.messages) {
+                throw new Error('No messages found');
+            }
 
-        if (!countResponse.result.messages) {
-            console.warn('No messages found for the query:', query);
-            displayEmails([]);
-            return;
-        }
+            totalEmails = countResponse.result.resultSizeEstimate || 0;
 
-        totalEmails = countResponse.result.resultSizeEstimate || 0;
+            const emails = await Promise.all(emailsResponse.result.messages.map(async message => {
+                const emailDetails = await gapi.client.gmail.users.messages.get({
+                    'userId': 'me',
+                    'id': message.id,
+                    'format': 'metadata',
+                    'metadataHeaders': ['Subject', 'From', 'Date']
+                });
+                
+                const headers = emailDetails.result.payload.headers;
+                const isStarred = emailDetails.result.labelIds.includes('STARRED');
+                const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
 
-        // Get emails for the current page
-        const response = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': EMAILS_PER_PAGE,
-            'q': query,
-            'orderBy': 'date'
-        });
+                return {
+                    id: message.id,
+                    subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
+                    from: headers.find(header => header.name === 'From')?.value || '(no sender)',
+                    date: headers.find(header => header.name === 'Date')?.value || '',
+                    snippet: emailDetails.result.snippet || 'No preview available',
+                    isStarred,
+                    isImportant
+                };
+            }));
 
-        if (!response.result.messages) {
-            console.warn('No messages returned for the current page:', currentPage);
-            displayEmails([]);
-            return;
-        }
+            displayEmails(emails);
+            success = true;
 
-        const emails = await Promise.all(response.result.messages.map(async message => {
-            const emailDetails = await gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
-            });
+        } catch (error) {
+            console.error(`Attempt ${retryCount + 1} failed:`, error);
+            retryCount++;
             
-            const headers = emailDetails.result.payload.headers;
-            const isStarred = emailDetails.result.labelIds.includes('STARRED');
-            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
-
-            return {
-                id: message.id,
-                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred,
-                isImportant
-            };
-        }));
-
-        displayEmails(emails);
-
-        // Automatically refresh emails after switching tabs
-        refreshEmails();
-
-    } catch (error) {
-        console.error('Error switching tab:', error);
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error loading emails. Please try again later.</p>
-            </div>
-        `;
+            if (retryCount < maxRetries) {
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            } else {
+                document.getElementById('emailList').innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #d93025;">
+                        <p>Error loading emails. Please try again.</p>
+                    </div>
+                `;
+            }
+        }
     }
 }
 
-function getLabelId(category) {
-    switch (category.toLowerCase()) {
-        case 'primary':
-            return 'CATEGORY_PERSONAL';
-        case 'social':
-            return 'CATEGORY_SOCIAL';
-        case 'promotions':
-            return 'CATEGORY_PROMOTIONS';
-        case 'updates':
-            return 'CATEGORY_UPDATES';
+function getQueryForCategory(category) {
+    switch (category) {
+        case 'starred':
+            return 'is:starred';
+        case 'important':
+            return 'is:important';
+        case 'sent':
+            return 'in:sent';
         default:
-            return 'INBOX';
+            return `category:${category}`;
     }
 }
 
@@ -1514,4 +1508,20 @@ function closeAISettings() {
         item.classList.remove('active');
     });
     document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+}
+
+function isEmailContent(text) {
+    // Check for common email patterns
+    const emailPatterns = [
+        /subject:/i,                   // Subject line
+        /dear\s+/i,                   // Greeting with "Dear"
+        /best regards/i,              // Common closing
+        /sincerely/i,                 // Common closing
+        /thank(s| you)/i,             // Thanks/Thank you
+        /\[.*?\]/i,                   // Text in square brackets like [Boss's Name]
+        /hope this (email|message|note) finds you well/i  // Common email opening
+    ];
+
+    // Return true if at least 2 email patterns are found
+    return emailPatterns.filter(pattern => pattern.test(text)).length >= 2;
 }
