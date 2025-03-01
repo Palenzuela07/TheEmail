@@ -24,7 +24,37 @@ let currentFilter = 'primary'; // Default filter
 // Define a maximum number of retry attempts
 const MAX_RETRY_ATTEMPTS = 3;
 
-document.addEventListener('DOMContentLoaded', initializeAPI);
+document.addEventListener('DOMContentLoaded', function() {
+    // Check for existing authentication
+    const accessToken = localStorage.getItem('email_access_token');
+    if (accessToken) {
+        // User is already authenticated
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        document.body.classList.add('app-active');
+        
+        // Display user greeting if name is available
+        const userName = localStorage.getItem('user_name');
+        if (userName) {
+            const firstName = userName.split(' ')[0];
+            document.getElementById('user-greeting').textContent = `Hello, ${firstName}!`;
+        }
+        
+        // Initialize the API and load emails
+        initializeAPI().then(() => {
+            listEmails();
+        });
+    } else {
+        // Initialize API for login
+        initializeAPI();
+    }
+    
+    // Set up event listeners for compose modal
+    document.getElementById('chat-input').addEventListener('keypress', handleChatKeyPress);
+    
+    // Initialize other UI elements
+    document.querySelectorAll('.email-tab')[0].classList.add('active');
+});
 
 function initializeAPI() {
     gapi.load('client', async () => {
@@ -63,38 +93,35 @@ function handleAuthClick() {
 }
 
 async function handleAuthResponse(response) {
-    if (response.error !== undefined) {
-        console.error('Auth error:', response.error);
+    if (response.error) {
+        console.error('Authentication error:', response.error);
         return;
     }
-    
+
     try {
-        const profile = await gapi.client.gmail.users.getProfile({
-            'userId': 'me'
-        });
+        const accessToken = response.access_token;
+        localStorage.setItem('email_access_token', accessToken);
         
-        userEmail = profile.result.emailAddress;
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('userEmail', userEmail);
+        // User information request
+        const userInfo = await gapi.client.oauth2.userinfo.get();
+        localStorage.setItem('user_email', userInfo.result.email);
+        localStorage.setItem('user_name', userInfo.result.name);
         
-        document.getElementById('user-greeting').textContent = `Hi, ${userEmail}`;
+        // Hide login container and show app
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         
-        // Show email tabs
-        document.querySelector('.email-tabs').style.display = 'flex';
+        // Add class to body to hide login background
+        document.body.classList.add('app-active');
         
-        // Switch to primary tab immediately after login
-        await switchTab('primary');
+        // Display user greeting
+        document.getElementById('user-greeting').textContent = `Hello, ${userInfo.result.given_name || userInfo.result.name.split(' ')[0]}!`;
         
-        // Automatically refresh emails after login
-        refreshEmails();
-        
-        // Simulate a click on the refresh button
-        document.querySelector('.refresh-btn').click();
+        // List emails
+        await listEmails();
         
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error handling auth response:', error);
     }
 }
 
@@ -290,11 +317,23 @@ function formatDate(date) {
 }
 
 function handleSignOut() {
-    const token = gapi.client.getToken();
-    if (token !== null) {
-        google.accounts.oauth2.revoke(token.access_token);
-        gapi.client.setToken('');
-        window.location.reload();
+    try {
+        localStorage.removeItem('email_access_token');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('user_name');
+        
+        // Hide app and show login
+        document.getElementById('app').style.display = 'none';
+        document.getElementById('login-container').style.display = 'flex';
+        
+        // Remove class from body to show login background
+        document.body.classList.remove('app-active');
+        
+        // Clear email list
+        document.getElementById('emailList').innerHTML = '';
+        
+    } catch (error) {
+        console.error('Error signing out:', error);
     }
 }
 
@@ -808,720 +847,4 @@ async function sendChatMessage() {
             ${userMessage}
         </div>
     `;
-    input.value = ''; // Clear input field
-    
-    // More sophisticated intent detection
-    const intent = detectUserIntent(userMessage.toLowerCase());
-    
-    if (intent.type === 'confirm') {
-        handleConfirmedAction(intent.action, messages);
-        return;
-    }
-    
-    if (intent.type === 'move_to_compose') {
-        if (intent.confidence === 'high') {
-            // Find and move the last AI message
-            moveLastAIMessageToCompose(messages);
-        } else {
-            // Ask for confirmation
-            messages.innerHTML += `
-                <div class="chat-message ai">
-                    Would you like me to move this response to the compose area? Please reply with "yes" to confirm or "no" to keep discussing.
-                </div>
-            `;
-        }
-        messages.scrollTop = messages.scrollHeight;
-        return;
-    }
-    
-    // Continue with regular chat functionality
-    try {
-        // Show loading state
-        messages.innerHTML += `
-            <div class="chat-message ai" id="loading-message">
-                <em>Typing...</em>
-            </div>
-        `;
-        messages.scrollTop = messages.scrollHeight;
-
-        // Add user message to conversation history
-        conversationHistory.push({
-            role: "user",
-            content: userMessage
-        });
-
-        // Call OpenAI API with full conversation history
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: conversationHistory,
-                temperature: 0.7
-            })
-        });
-
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error?.message || 'API request failed');
-        }
-
-        const aiResponse = data.choices[0].message.content;
-        
-        // Add AI response to conversation history
-        conversationHistory.push({
-            role: "assistant",
-            content: aiResponse
-        });
-        
-        // Remove loading message
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-            loadingMessage.remove();
-        }
-
-        // Add AI response to UI
-        messages.innerHTML += `
-            <div class="chat-message ai">
-                ${aiResponse}
-            </div>
-        `;
-
-        // If the response looks like an email, ask for confirmation
-        if (isEmailContent(aiResponse)) {
-            messages.innerHTML += `
-                <div class="chat-message ai">
-                    Is this email good to move to compose, or would you like me to make changes?
-                </div>
-            `;
-        }
-
-    } catch (error) {
-        console.error('Error getting AI response:', error);
-        
-        // Remove loading message
-        const loadingMessage = document.getElementById('loading-message');
-        if (loadingMessage) {
-            loadingMessage.remove();
-        }
-
-        // Show error message
-        messages.innerHTML += `
-            <div class="chat-message ai">
-                Sorry, I encountered an error. Please try again.
-            </div>
-        `;
-    }
-    
-    messages.scrollTop = messages.scrollHeight;
-}
-
-function detectUserIntent(message) {
-    // Common negative responses
-    const negativePatterns = [
-        /^(no|nah|nope)/i,
-        /not (yet|now|really)/i,
-        /make (some|a few|more) changes/i,
-        /can you (change|modify|update|revise)/i,
-        /let'?s (change|modify|update|revise)/i,
-        /needs? (some|a few|more) changes/i
-    ];
-
-    for (const pattern of negativePatterns) {
-        if (pattern.test(message)) {
-            return { type: 'chat', confidence: 'high' };
-        }
-    }
-
-    // Natural language positive responses
-    const positivePatterns = [
-        // Direct yes variations
-        /^(yes|yea|yeah|yup|sure|ok|okay)/i,
-        
-        // Positive phrases with "fine"
-        /(that'?s |it'?s |looks |seems )?(fine|good|great|perfect)( to me| with me)?/i,
-        
-        // Approval phrases
-        /i like it/i,
-        /works? for me/i,
-        /go (ahead|for it)/i,
-        /move it/i,
-        /use (it|that|this)/i,
-        
-        // Positive with modifications
-        /yes,? but/i,
-        /yeah,? that/i,
-        /fine,? just/i
-    ];
-
-    for (const pattern of positivePatterns) {
-        if (pattern.test(message)) {
-            // If the message contains any modifiers or conditions, treat as chat
-            if (message.includes('if') || 
-                message.includes('but') || 
-                message.includes('maybe') || 
-                message.includes('could') ||
-                message.includes('should')) {
-                return { type: 'chat', confidence: 'high' };
-            }
-            return { type: 'confirm', action: 'move', confidence: 'high' };
-        }
-    }
-
-    // Default to chat for any other responses
-    return { type: 'chat', confidence: 'high' };
-}
-
-function handleConfirmedAction(action, messages) {
-    if (action === 'move') {
-        // First move the content
-        const success = moveLastAIMessageToCompose(messages);
-        
-        // Only show confirmation if we successfully moved content
-        if (success) {
-            messages.innerHTML += `
-                <div class="chat-message ai">
-                    I've moved the response to the compose area. Let me know if you need any changes!
-                </div>
-            `;
-        } else {
-            messages.innerHTML += `
-                <div class="chat-message ai">
-                    I couldn't find the last response to move. Would you like me to generate a new one?
-                </div>
-            `;
-        }
-    }
-    messages.scrollTop = messages.scrollHeight;
-}
-
-function moveLastAIMessageToCompose(messages) {
-    const aiMessages = messages.querySelectorAll('.chat-message.ai');
-    let emailContent = null;
-    let foundQuestion = false;
-    
-    // First pass: find the confirmation question
-    for (let i = aiMessages.length - 1; i >= 0; i--) {
-        const message = aiMessages[i];
-        if (message.textContent.includes('Is this reply good to move to compose')) {
-            foundQuestion = true;
-            // The email content should be the message right before this question
-            if (i > 0) {
-                emailContent = aiMessages[i - 1];
-            }
-            break;
-        }
-    }
-    
-    if (emailContent && foundQuestion) {
-        document.getElementById('compose-body').value = emailContent.textContent;
-        return true;
-    }
-    
-    // Fallback: look for the last non-system message if we didn't find the specific pattern
-    for (let i = aiMessages.length - 1; i >= 0; i--) {
-        const message = aiMessages[i];
-        // Skip all system messages and questions
-        if (!message.textContent.includes('Would you like') && 
-            !message.textContent.includes('I\'ve moved') &&
-            !message.textContent.includes('Okay, let me know') &&
-            !message.textContent.includes('Great! If you have') &&
-            !message.textContent.includes('Is this reply good') &&
-            !message.textContent.includes('Typing...')) {
-            
-            document.getElementById('compose-body').value = message.textContent;
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-async function performSearch() {
-    const query = document.getElementById('search-input').value.trim();
-    if (!query) {
-        alert('Please enter a search query');
-        return;
-    }
-
-    let prefix = '';
-    switch (currentFilter) {
-        case 'starred':
-            prefix = 'is:starred';
-            break;
-        case 'important':
-            prefix = 'is:important';
-            break;
-        case 'sent':
-            prefix = 'in:sent';
-            break;
-        default:
-            prefix = `category:${currentFilter}`;
-    }
-
-    const searchQuery = `${prefix} ${query}`.trim();
-    console.log(`Current Filter: ${currentFilter}`);
-    console.log(`Search Query: ${searchQuery}`);
-
-    try {
-        console.log(`Searching emails with query: ${searchQuery}`);
-
-        // Show loading state
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p>Searching emails...</p>
-            </div>
-        `;
-
-        // Reset page and get initial count
-        currentPage = 1;
-
-        // Perform search using the query
-        const response = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': EMAILS_PER_PAGE,
-            'q': searchQuery
-        });
-
-        if (!response.result.messages) {
-            displayEmails([]);
-            return;
-        }
-
-        const emails = await Promise.all(response.result.messages.map(async message => {
-            const emailDetails = await gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
-            });
-            
-            const headers = emailDetails.result.payload.headers;
-            const isStarred = emailDetails.result.labelIds.includes('STARRED');
-            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
-
-            return {
-                id: message.id,
-                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred,
-                isImportant
-            };
-        }));
-
-        displayEmails(emails);
-
-    } catch (error) {
-        console.error('Error performing search:', error);
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px; color: #d93025;">
-                <p>Error searching emails. Please try again.</p>
-            </div>
-        `;
-    }
-}
-
-async function toggleStar(emailId, isCurrentlyStarred) {
-    try {
-        const labelAction = isCurrentlyStarred ? 'remove' : 'add';
-        const labelId = 'STARRED';
-
-        // Update the email's labels
-        await gapi.client.gmail.users.messages.modify({
-            'userId': 'me',
-            'id': emailId,
-            'resource': {
-                [`${labelAction}LabelIds`]: [labelId]
-            }
-        });
-
-        // Update the UI
-        const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
-        if (starElement) {
-            if (isCurrentlyStarred) {
-                starElement.classList.remove('gold-star');
-                starElement.innerHTML = '☆';
-            } else {
-                starElement.classList.add('gold-star');
-                starElement.innerHTML = '<span class="gold-star">★</span>';
-            }
-        }
-
-        console.log(`Email ${emailId} ${labelAction}ed to starred.`);
-    } catch (error) {
-        console.error('Error toggling star:', error);
-    }
-}
-
-async function replyEmail(emailId) {
-    // Open the compose modal immediately
-    openComposeModal();
-
-    // Show a loading indicator in the AI chatbox
-    const messages = document.getElementById('chat-messages');
-    messages.innerHTML = `
-        <div class="chat-message ai">
-            <em>Generating reply...</em>
-        </div>
-    `;
-    messages.scrollTop = messages.scrollHeight;
-
-    try {
-        const response = await gapi.client.gmail.users.messages.get({
-            'userId': 'me',
-            'id': emailId,
-            'format': 'full'
-        });
-
-        const email = response.result;
-        const headers = email.payload.headers;
-
-        // Extract email details
-        const fromHeader = headers.find(header => header.name === 'From')?.value || '';
-        const emailMatch = fromHeader.match(/<(.+?)>/) || fromHeader.match(/[\w.-]+@[\w.-]+\.\w+/);
-        const replyToEmail = emailMatch ? emailMatch[1] || emailMatch[0] : '';
-
-        const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
-        const emailBody = getBody(email.payload);
-
-        // Update the compose modal with email details
-        document.getElementById('compose-to').value = replyToEmail;
-        document.getElementById('compose-subject').value = `Re: ${subject}`;
-
-        // Generate AI response
-        const aiResponse = await generateAIReply(emailBody);
-
-        // Replace loading message with AI response and new question
-        messages.innerHTML = `
-            <div class="chat-message ai">
-                ${aiResponse}
-            </div>
-            <div class="chat-message ai">
-                Is this reply good to move to compose, or would you like me to make more changes?
-            </div>
-        `;
-        messages.scrollTop = messages.scrollHeight;
-
-        // Listen for user input
-        const chatInput = document.getElementById('chat-input');
-        chatInput.addEventListener('keypress', function handleUserResponse(event) {
-            if (event.key === 'Enter') {
-                const userResponse = chatInput.value.trim().toLowerCase();
-                console.log('User response:', userResponse); // Debugging log
-                chatInput.value = ''; // Clear input field
-
-                if (userResponse.includes('yes') || userResponse.includes('good') || userResponse.includes('move')) {
-                    console.log('Moving AI response to compose window'); // Debugging log
-                    moveToCompose(aiResponse);
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            Great! I've moved the reply to the compose window.
-                        </div>
-                    `;
-                } else {
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            Okay, let me know if you need any changes.
-                        </div>
-                    `;
-                }
-                messages.scrollTop = messages.scrollHeight;
-                chatInput.removeEventListener('keypress', handleUserResponse); // Remove listener after handling
-            }
-        });
-
-    } catch (error) {
-        console.error('Error preparing reply:', error);
-        alert('Error preparing reply. Please try again.');
-    }
-}
-
-function getBody(payload) {
-    let content = '';
-    if (payload.parts) {
-        for (let part of payload.parts) {
-            if (part.mimeType === 'text/plain' && part.body.data) {
-                content += decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
-            }
-            if (part.parts) {
-                content += getBody(part);
-            }
-        }
-    } else if (payload.body.data) {
-        content = decodeURIComponent(escape(atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
-    }
-    return content;
-}
-
-async function generateAIReply(emailBody) {
-    try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
-            },
-            body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [{
-                    role: "system",
-                    content: "You are an email assistant. Generate a polite and professional reply."
-                }, {
-                    role: "user",
-                    content: `Reply to this email: ${emailBody}`
-                }],
-                temperature: 0.7
-            })
-        });
-
-        const data = await response.json();
-        return data.choices[0].message.content;
-    } catch (error) {
-        console.error('Error generating AI reply:', error);
-        return 'Error generating reply. Please try again.';
-    }
-}
-
-function moveToCompose(aiResponse) {
-    console.log('Setting compose body with AI response'); // Debugging log
-    document.getElementById('compose-body').value = aiResponse;
-    // Ensure the compose modal is open
-    const modal = document.getElementById('compose-modal');
-    if (!modal.classList.contains('show')) {
-        openComposeModal();
-    }
-}
-
-// Utility function to escape HTML
-function escapeHtml(unsafe) {
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-function ensureTabsVisible() {
-    const emailTabs = document.querySelector('.email-tabs');
-    if (emailTabs) {
-        emailTabs.style.display = 'flex'; // Ensure tabs are visible
-    }
-}
-
-async function switchTab(category) {
-    console.log(`Switching to ${category} tab`);
-    currentFilter = category;
-
-    // Hide AI Settings if visible
-    const settingsContainer = document.getElementById('ai-settings-container');
-    if (settingsContainer) {
-        settingsContainer.style.display = 'none';
-    }
-
-    // Show search bar and email list
-    document.querySelector('.search-bar').style.display = 'flex';
-    document.getElementById('emailList').style.display = 'block';
-    document.querySelector('.email-tabs').style.display = 'flex';
-
-    // Update active states
-    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    if (category === 'primary') {
-        document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
-    } else {
-        const subNavItem = document.querySelector(`.sub-nav-item[onclick*="${category}"]`);
-        if (subNavItem) {
-            subNavItem.classList.add('active');
-        }
-    }
-
-    // Update search placeholder
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.value = '';
-        switch (category) {
-            case 'starred':
-            case 'important':
-            case 'sent':
-                searchInput.placeholder = `Search ${category} emails...`;
-                document.querySelector('.email-tabs').style.display = 'none';
-                break;
-            default:
-                searchInput.placeholder = 'Search emails...';
-                document.querySelector('.email-tabs').style.display = 'flex';
-        }
-    }
-
-    // Show loading state once
-    document.getElementById('emailList').innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <p>Loading ${category} emails...</p>
-        </div>
-    `;
-
-    let retryCount = 0;
-    const maxRetries = 3;
-    let success = false;
-
-    while (retryCount < maxRetries && !success) {
-        try {
-            currentPage = 1;
-            const query = getQueryForCategory(category);
-            console.log(`Attempt ${retryCount + 1}: Querying emails with: ${query}`);
-
-            // Get both the count and the latest emails in one attempt
-            const [countResponse, emailsResponse] = await Promise.all([
-                gapi.client.gmail.users.messages.list({
-                    'userId': 'me',
-                    'maxResults': 500,
-                    'q': query
-                }),
-                gapi.client.gmail.users.messages.list({
-                    'userId': 'me',
-                    'maxResults': EMAILS_PER_PAGE,
-                    'q': query,
-                    'orderBy': 'date'
-                })
-            ]);
-
-            if (!countResponse.result.messages || !emailsResponse.result.messages) {
-                throw new Error('No messages found');
-            }
-
-            totalEmails = countResponse.result.resultSizeEstimate || 0;
-
-            const emails = await Promise.all(emailsResponse.result.messages.map(async message => {
-                const emailDetails = await gapi.client.gmail.users.messages.get({
-                    'userId': 'me',
-                    'id': message.id,
-                    'format': 'metadata',
-                    'metadataHeaders': ['Subject', 'From', 'Date']
-                });
-                
-                const headers = emailDetails.result.payload.headers;
-                const isStarred = emailDetails.result.labelIds.includes('STARRED');
-                const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
-
-                return {
-                    id: message.id,
-                    subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                    from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                    date: headers.find(header => header.name === 'Date')?.value || '',
-                    snippet: emailDetails.result.snippet || 'No preview available',
-                    isStarred,
-                    isImportant
-                };
-            }));
-
-            displayEmails(emails);
-            success = true;
-
-        } catch (error) {
-            console.error(`Attempt ${retryCount + 1} failed:`, error);
-            retryCount++;
-            
-            if (retryCount < maxRetries) {
-                // Wait before retrying
-                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-            } else {
-                document.getElementById('emailList').innerHTML = `
-                    <div style="text-align: center; padding: 20px; color: #d93025;">
-                        <p>Error loading emails. Please try again.</p>
-                    </div>
-                `;
-            }
-        }
-    }
-}
-
-function getQueryForCategory(category) {
-    switch (category) {
-        case 'starred':
-            return 'is:starred';
-        case 'important':
-            return 'is:important';
-        case 'sent':
-            return 'in:sent';
-        default:
-            return `category:${category}`;
-    }
-}
-
-// Add this function to handle AI settings click
-function openAISettings() {
-    // Hide email list, viewer, tabs, and search bar
-    document.getElementById('emailList').style.display = 'none';
-    document.getElementById('email-viewer').style.display = 'none';
-    document.getElementById('email-tabs').style.display = 'none';
-    document.querySelector('.search-bar').style.display = 'none';
-    
-    // Get or create settings container
-    let settingsContainer = document.getElementById('ai-settings-container');
-    if (!settingsContainer) {
-        settingsContainer = document.createElement('div');
-        settingsContainer.id = 'ai-settings-container';
-        document.querySelector('.main-content').appendChild(settingsContainer);
-    }
-    
-    // Update settings content without back button
-    settingsContainer.innerHTML = `
-        <div class="settings-header">
-            <h2>AI Settings</h2>
-        </div>
-        <div class="settings-content">
-            <p>AI Settings page - Coming soon</p>
-        </div>
-    `;
-    
-    settingsContainer.style.display = 'block';
-    
-    // Update active state in navigation - include both nav-item and sub-nav-item
-    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    document.querySelector('.nav-item[onclick*="openAISettings"]').classList.add('active');
-}
-
-function closeAISettings() {
-    // Hide settings container
-    const settingsContainer = document.getElementById('ai-settings-container');
-    if (settingsContainer) {
-        settingsContainer.style.display = 'none';
-    }
-    
-    // Show email list, tabs, and search bar
-    document.getElementById('emailList').style.display = 'block';
-    document.getElementById('email-tabs').style.display = 'flex';
-    document.querySelector('.search-bar').style.display = 'flex';
-    
-    // Reset active state in navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
-}
-
-function isEmailContent(text) {
-    // Check for common email patterns
-    const emailPatterns = [
-        /subject:/i,                   // Subject line
-        /dear\s+/i,                   // Greeting with "Dear"
-        /best regards/i,              // Common closing
-        /sincerely/i,                 // Common closing
-        /thank(s| you)/i,             // Thanks/Thank you
-        /\[.*?\]/i,                   // Text in square brackets like [Boss's Name]
-        /hope this (email|message|note) finds you well/i  // Common email opening
-    ];
-
-    // Return true if at least 2 email patterns are found
-    return emailPatterns.filter(pattern => pattern.test(text)).length >= 2;
 }

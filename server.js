@@ -17,8 +17,13 @@ app.use((req, res, next) => {
 // Serve static files from the current directory
 app.use(express.static(__dirname));
 
-// Serve index.html for the root route
+// Serve home.html for the root route
 app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'home.html'));
+});
+
+// Add a specific route for the login page
+app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 

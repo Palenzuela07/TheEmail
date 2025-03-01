@@ -13,16 +13,208 @@
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async></script>
     <script src="main.js?v=${Date.now()}" defer></script>
+    <script>
+        // Add code to toggle body class based on app visibility
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initial state check
+            if (document.getElementById('app').style.display !== 'none') {
+                document.body.classList.add('app-active');
+            }
+            
+            // Create observer to watch for app visibility changes
+            const appObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.attributeName === 'style') {
+                        if (document.getElementById('app').style.display !== 'none') {
+                            document.body.classList.add('app-active');
+                        } else {
+                            document.body.classList.remove('app-active');
+                        }
+                    }
+                });
+            });
+            
+            // Start observing the app container
+            appObserver.observe(document.getElementById('app'), { attributes: true });
+        });
+    </script>
     <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --secondary: #f1f3f4;
+            --text-dark: #202124;
+            --text-light: #5f6368;
+            --bg-light: #ffffff;
+            --bg-off: #f6f8fc;
+            --accent: #c2e7ff;
+        }
+        
         /* Login page styles */
         #login-container {
             background: white;
             padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             text-align: center;
             max-width: 400px;
             width: 90%;
+            position: relative;
+            z-index: 2;
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        #login-container h1 {
+            color: var(--text-dark);
+            font-size: 2.2rem;
+            margin-bottom: 1rem;
+            position: relative;
+            display: inline-block;
+        }
+
+        #login-container h1::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(45deg, var(--primary), #9c27b0);
+            border-radius: 3px;
+        }
+
+        .welcome-text {
+            color: var(--text-light);
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+
+        .login-button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+            max-width: 280px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.12);
+        }
+
+        .login-button::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                to right,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.3) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            transform: rotate(30deg);
+            transition: transform 0.5s;
+            opacity: 0;
+        }
+
+        .login-button:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .login-button:hover::after {
+            transform: rotate(30deg) translate(100%, 100%);
+            opacity: 1;
+        }
+
+        .back-button {
+            margin-top: 16px;
+            color: var(--primary);
+            background: transparent;
+            border: 1px solid var(--primary);
+            padding: 0.6rem 1.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .back-button:hover {
+            background-color: rgba(26, 115, 232, 0.08);
+            transform: translateY(-2px);
+        }
+
+        .emoji-animate {
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Floating animation for background emoji */
+        .floating-emoji {
+            position: absolute;
+            opacity: 0.2;
+            z-index: 0;
+            user-select: none;
+            pointer-events: none;
+            font-size: 40px;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+
+        /* Hide login background when app is active */
+        body.app-active .login-background {
+            display: none !important;
+        }
+
+        /* Position login background to cover entire screen */
+        .login-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Gradient text effect */
+        .gradient-text {
+            background: linear-gradient(45deg, var(--primary), #9c27b0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
         }
 
         /* App styles - only apply when #app is visible */
@@ -45,8 +237,9 @@
             background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         }
 
-        body:has(#app:not([style*="display: none"])) {
+        body.app-active {
             background: #f6f8fc;
+            display: block;
         }
 
         .app-container {
@@ -1115,6 +1308,17 @@
     </style>
 </head>
 <body>
+    <!-- Background floating emoji for login page -->
+    <div class="login-background">
+        <div class="floating-emoji" style="top: 15%; left: 5%;">✉️</div>
+        <div class="floating-emoji" style="top: 30%; right: 10%;">📧</div>
+        <div class="floating-emoji" style="top: 70%; left: 15%;">📱</div>
+        <div class="floating-emoji" style="top: 50%; right: 5%;">🔍</div>
+        <div class="floating-emoji" style="top: 85%; left: 8%;">⭐</div>
+        <div class="floating-emoji" style="top: 25%; left: 60%;">🤖</div>
+        <div class="floating-emoji" style="top: 65%; right: 15%;">🚀</div>
+    </div>
+    
     <div id="app" style="display: none;">
         <div class="app-container">
             <div class="sidebar">
@@ -1187,14 +1391,17 @@
         </div>
     </div>
     <div id="login-container" class="container">
-        <h1>Welcome!</h1>
+        <h1>Welcome to <span class="gradient-text">TheEmail</span> <span class="emoji-animate">✨</span></h1>
         <p class="welcome-text">
-            Access your emails easily and securely with our Email Reader.
-            Sign in with Google to get started.
+            Access your emails easily and securely with our intelligent email manager.
+            Connect with your Google account to get started.
         </p>
         <button class="login-button" onclick="handleAuthClick()">
-            Sign in with Google
+            Sign in with Google <span class="emoji-animate">🚀</span>
         </button>
+        <a href="/" class="back-button">
+            Back to Home Page
+        </a>
     </div>
     <div id="compose-modal" class="modal" style="display: none;">
         <div class="modal-content">
