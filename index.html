@@ -15,14 +15,132 @@
     <script src="main.js?v=${Date.now()}" defer></script>
     <style>
         /* Login page styles */
+        body:has(#login-container:not([style*="display: none"])) {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            margin: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
         #login-container {
             background: white;
             padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             text-align: center;
             max-width: 400px;
             width: 90%;
+            position: relative;
+            z-index: 10;
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        #login-container h1 {
+            font-size: 2.2rem;
+            margin-bottom: 1.5rem;
+            color: #202124;
+        }
+
+        #login-container h1 span {
+            background: linear-gradient(45deg, #1a73e8, #9c27b0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+
+        .welcome-text {
+            color: #5f6368;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        .login-button {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px rgba(26, 115, 232, 0.2);
+        }
+
+        .login-button:hover {
+            background-color: #1557b0;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(26, 115, 232, 0.3);
+        }
+
+        .emoji-animate {
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Floating emoji for login page */
+        .floating-emoji {
+            position: absolute;
+            opacity: 0.15;
+            z-index: 1;
+            user-select: none;
+            pointer-events: none;
+            font-size: 40px;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        /* Hide floating emojis when app is visible */
+        body:has(#app:not([style*="display: none"])) .floating-emoji {
+            display: none;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+
+        /* Logo style for login page */
+        .login-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .login-logo-icon {
+            font-size: 2.5rem;
+            color: #1a73e8;
+            animation: pulse 3s infinite;
+        }
+
+        .login-logo-text {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #1a73e8;
         }
 
         /* App styles - only apply when #app is visible */
@@ -1115,6 +1233,14 @@
     </style>
 </head>
 <body>
+    <!-- Add floating emoji backgrounds for login screen -->
+    <div class="floating-emoji" style="top: 15%; left: 5%;">✉️</div>
+    <div class="floating-emoji" style="top: 30%; right: 10%;">📧</div>
+    <div class="floating-emoji" style="top: 70%; left: 15%;">📱</div>
+    <div class="floating-emoji" style="top: 50%; right: 5%;">🔍</div>
+    <div class="floating-emoji" style="top: 85%; left: 8%;">⭐</div>
+    <div class="floating-emoji" style="top: 25%; left: 60%;">🤖</div>
+    
     <div id="app" style="display: none;">
         <div class="app-container">
             <div class="sidebar">
@@ -1187,13 +1313,17 @@
         </div>
     </div>
     <div id="login-container" class="container">
-        <h1>Welcome!</h1>
+        <div class="login-logo">
+            <span class="login-logo-icon">📧</span>
+            <span class="login-logo-text">TheEmail</span>
+        </div>
+        <h1>Welcome to <span>TheEmail</span>!</h1>
         <p class="welcome-text">
             Access your emails easily and securely with our Email Reader.
             Sign in with Google to get started.
         </p>
         <button class="login-button" onclick="handleAuthClick()">
-            Sign in with Google
+            Sign in with Google <span class="emoji-animate">🚀</span>
         </button>
     </div>
     <div id="compose-modal" class="modal" style="display: none;">
