@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Email - Smart Email Management</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --secondary: #f1f3f4;
+            --text-dark: #202124;
+            --text-light: #5f6368;
+            --bg-light: #ffffff;
+            --bg-off: #f6f8fc;
+            --accent: #c2e7ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        header {
+            background-color: var(--bg-light);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 5%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            font-size: 1.8rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            color: var(--text-light);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .login-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .login-btn:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .hero {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 10rem 5% 5rem;
+            min-height: 100vh;
+        }
+
+        .hero-content {
+            max-width: 550px;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-light);
+            margin-bottom: 2rem;
+        }
+
+        .hero-image {
+            flex: 1;
+            text-align: right;
+            max-width: 650px;
+        }
+
+        .hero-image img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .cta-primary {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cta-primary::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(
+                to right,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.3) 50%,
+                rgba(255, 255, 255, 0) 100%
+            );
+            transform: rotate(30deg);
+            transition: transform 0.5s;
+            opacity: 0;
+        }
+
+        .cta-primary:hover::after {
+            transform: rotate(30deg) translate(100%, 100%);
+            opacity: 1;
+        }
+
+        .cta-secondary {
+            background-color: var(--secondary);
+            color: var(--text-dark);
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .cta-secondary:hover {
+            background-color: #e8eaed;
+        }
+
+        .features {
+            background-color: var(--bg-light);
+            padding: 5rem 5%;
+        }
+
+        .features-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-title h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-title p {
+            color: var(--text-light);
+            font-size: 1.2rem;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background-color: var(--bg-off);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s, box-shadow 0.3s, background-color 0.3s;
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, rgba(26, 115, 232, 0.1), rgba(66, 133, 244, 0.1));
+            opacity: 0;
+            z-index: -1;
+            transition: opacity 0.3s;
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-icon {
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card p {
+            color: var(--text-light);
+        }
+
+        .ai-section {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 5rem 5%;
+        }
+
+        .ai-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 4rem;
+        }
+
+        .ai-content {
+            flex: 1;
+        }
+
+        .ai-content h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .ai-content p {
+            color: var(--text-light);
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+
+        .ai-image {
+            flex: 1;
+        }
+
+        .ai-image img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        .testimonials {
+            background-color: var(--bg-light);
+            padding: 5rem 5%;
+        }
+
+        .testimonial-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .testimonial-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .testimonial-card {
+            background-color: var(--bg-off);
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .testimonial-text {
+            font-style: italic;
+            margin-bottom: 1.5rem;
+        }
+
+        .testimonial-author {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .author-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        .author-info h4 {
+            font-weight: 600;
+        }
+
+        .author-info p {
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        .cta-section {
+            text-align: center;
+            padding: 5rem 5%;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .cta-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-section p {
+            color: var(--text-light);
+            font-size: 1.2rem;
+            margin-bottom: 2rem;
+        }
+
+        footer {
+            background-color: var(--text-dark);
+            color: white;
+            padding: 3rem 5%;
+        }
+
+        .footer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 2rem;
+        }
+
+        .footer-logo {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .footer-links h3 {
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-links a {
+            color: #c3cfe2;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: white;
+        }
+
+        .copyright {
+            text-align: center;
+            padding-top: 2rem;
+            margin-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #c3cfe2;
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                flex-direction: column;
+                padding-top: 8rem;
+            }
+
+            .hero-content {
+                text-align: center;
+                margin-bottom: 3rem;
+            }
+
+            .cta-buttons {
+                justify-content: center;
+            }
+
+            .ai-container {
+                flex-direction: column;
+            }
+
+            .ai-content {
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+                padding-bottom: 1rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .feature-grid, .testimonial-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Add animation for emoji */
+        .emoji-animate {
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* Floating animation for background emoji */
+        .floating-emoji {
+            position: absolute;
+            opacity: 0.2;
+            z-index: 0;
+            user-select: none;
+            pointer-events: none;
+            font-size: 40px;
+            animation: float 8s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+            100% { transform: translateY(0) rotate(0deg); }
+        }
+
+        /* Gradient text effect for main headings */
+        .gradient-text {
+            background: linear-gradient(45deg, var(--primary), #9c27b0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+
+        /* Enhanced hover effect for feature cards */
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .cta-primary:hover {
+            background-color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        /* Fade-in animation on scroll */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Add staggered delay for children */
+        .fade-in-container .fade-in:nth-child(1) { transition-delay: 0.1s; }
+        .fade-in-container .fade-in:nth-child(2) { transition-delay: 0.2s; }
+        .fade-in-container .fade-in:nth-child(3) { transition-delay: 0.3s; }
+        .fade-in-container .fade-in:nth-child(4) { transition-delay: 0.4s; }
+        .fade-in-container .fade-in:nth-child(5) { transition-delay: 0.5s; }
+        .fade-in-container .fade-in:nth-child(6) { transition-delay: 0.6s; }
+    </style>
+</head>
+<body>
+    <!-- Background floating emoji -->
+    <div class="floating-emoji" style="top: 15%; left: 5%;">✉️</div>
+    <div class="floating-emoji" style="top: 30%; right: 10%;">📧</div>
+    <div class="floating-emoji" style="top: 70%; left: 15%;">📱</div>
+    <div class="floating-emoji" style="top: 50%; right: 5%;">🔍</div>
+    <div class="floating-emoji" style="top: 85%; left: 8%;">⭐</div>
+    <div class="floating-emoji" style="top: 25%; left: 60%;">🤖</div>
+    <div class="floating-emoji" style="top: 65%; right: 15%;">🚀</div>
+    <header>
+        <nav class="navbar">
+            <a href="#" class="logo">
+                <span class="logo-icon">📧</span>
+                <span>TheEmail</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">✨ Features</a>
+                <a href="#ai">🤖 AI Assistant</a>
+                <a href="#testimonials">💬 Testimonials</a>
+            </div>
+            <a href="/login/" class="login-btn">Login <span class="emoji-animate">🚀</span></a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-content fade-in">
+                <h1><span class="emoji-animate">✨</span> Smart Email Management with <span class="gradient-text">AI Assistance</span></h1>
+                <p>TheEmail brings intelligent organization, AI-powered assistance, and a clean interface to help you manage your emails more efficiently. Connect with your Google account and experience a new way to handle your inbox.</p>
+                <div class="cta-buttons">
+                    <a href="/login/" class="cta-primary">Get Started <span class="emoji-animate">🚀</span></a>
+                    <a href="#features" class="cta-secondary">Learn More <span>👇</span></a>
+                </div>
+            </div>
+            <div class="hero-image fade-in">
+                <img src="https://images.unsplash.com/photo-1557200134-90327ee9fafa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80" alt="Email management dashboard">
+            </div>
+        </section>
+
+        <section id="features" class="features">
+            <div class="features-container">
+                <div class="section-title fade-in">
+                    <h2><span class="emoji-animate">✨</span> Smart Features for <span class="gradient-text">Modern Email</span> <span class="emoji-animate">✨</span></h2>
+                    <p>Designed to make email management more intuitive and efficient</p>
+                </div>
+                <div class="feature-grid fade-in-container">
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">📥</div>
+                        <h3>Intelligent Organization</h3>
+                        <p>Automatically categorizes your emails into Primary, Social, Promotions, and Updates to keep your inbox organized and focused.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">🔍</div>
+                        <h3>Advanced Search</h3>
+                        <p>Quickly find what you're looking for with powerful search capabilities that filter through your entire email history.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">⭐</div>
+                        <h3>Starred Emails</h3>
+                        <p>Mark important emails with stars to easily find them later, keeping your most critical conversations accessible.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">🚀</div>
+                        <h3>Fast & Responsive</h3>
+                        <p>Enjoy a smooth experience with our lightweight and responsive interface that works on any device.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">🔒</div>
+                        <h3>Secure Access</h3>
+                        <p>Your data stays secure with OAuth authentication, ensuring only you have access to your emails.</p>
+                    </div>
+                    <div class="feature-card fade-in">
+                        <div class="feature-icon">📱</div>
+                        <h3>Mobile Friendly</h3>
+                        <p>Access your emails on the go with our mobile-optimized interface that works seamlessly across all devices.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ai" class="ai-section">
+            <div class="ai-container">
+                <div class="ai-content fade-in">
+                    <h2><span class="emoji-animate">🤖</span> <span class="gradient-text">AI-Powered</span> Email Assistant</h2>
+                    <p>Our intelligent assistant helps you draft emails, summarize conversations, and manage your inbox more efficiently. Simply chat with the AI to get help with composing professional emails, understanding complex threads, or generating quick responses.</p>
+                    <a href="/login/" class="cta-primary">Try It Now <span class="emoji-animate">✨</span></a>
+                </div>
+                <div class="ai-image fade-in">
+                    <img src="https://images.unsplash.com/photo-1531482615713-2afd69097998?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1170&q=80" alt="AI Assistant interface">
+                </div>
+            </div>
+        </section>
+
+        <section id="testimonials" class="testimonials">
+            <div class="testimonial-container">
+                <div class="section-title fade-in">
+                    <h2><span class="emoji-animate">💬</span> What Our <span class="gradient-text">Users Say</span> <span class="emoji-animate">💬</span></h2>
+                    <p>Join thousands of professionals who've improved their email workflow</p>
+                </div>
+                <div class="testimonial-grid fade-in-container">
+                    <div class="testimonial-card fade-in">
+                        <p class="testimonial-text">"TheEmail has completely changed how I manage my work correspondence. The AI assistant is like having a personal secretary helping me draft emails."</p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">JD</div>
+                            <div class="author-info">
+                                <h4>John Doe</h4>
+                                <p>Marketing Director</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="testimonial-card fade-in">
+                        <p class="testimonial-text">"I love how the interface is clean and distraction-free. The intelligent categorization helps me focus on important emails first and deal with the rest later."</p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">AS</div>
+                            <div class="author-info">
+                                <h4>Alice Smith</h4>
+                                <p>Product Manager</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="testimonial-card fade-in">
+                        <p class="testimonial-text">"The AI compose feature has saved me hours of work every week. It helps me write professional responses quickly, even for complex business inquiries."</p>
+                        <div class="testimonial-author">
+                            <div class="author-avatar">RJ</div>
+                            <div class="author-info">
+                                <h4>Robert Johnson</h4>
+                                <p>Entrepreneur</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta-section">
+            <div class="cta-container fade-in">
+                <h2><span class="emoji-animate">🚀</span> Ready to <span class="gradient-text">Transform</span> Your Email Experience?</h2>
+                <p>Join thousands of users who have already improved their email workflow with TheEmail. It's free to start!</p>
+                <a href="/login/" class="cta-primary">Get Started Now <span class="emoji-animate">✨</span></a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="footer-container">
+            <div class="footer-about">
+                <div class="footer-logo">
+                    <span class="logo-icon">📧</span>
+                    <span>TheEmail</span>
+                </div>
+                <p>Smart email management with AI assistance to help you stay organized and productive.</p>
+            </div>
+            <div class="footer-links">
+                <h3>Features</h3>
+                <ul>
+                    <li><a href="#features">📥 Smart Organization</a></li>
+                    <li><a href="#features">🤖 AI Assistant</a></li>
+                    <li><a href="#features">🔍 Search Capabilities</a></li>
+                    <li><a href="#features">📱 Mobile Access</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h3>Company</h3>
+                <ul>
+                    <li><a href="#">👥 About Us</a></li>
+                    <li><a href="#">🔒 Privacy Policy</a></li>
+                    <li><a href="#">📝 Terms of Service</a></li>
+                    <li><a href="#">📞 Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h3>Support</h3>
+                <ul>
+                    <li><a href="#">❓ Help Center</a></li>
+                    <li><a href="#">❔ FAQs</a></li>
+                    <li><a href="#">👪 Community</a></li>
+                    <li><a href="#">📣 Feedback</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="copyright">
+            <p>&copy; 2023 TheEmail. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript for animations on scroll -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize - check for elements already in view on page load
+            checkVisibility();
+            
+            // Add scroll event listener
+            window.addEventListener('scroll', function() {
+                checkVisibility();
+            });
+            
+            // Function to check if elements are visible in viewport
+            function checkVisibility() {
+                const fadeElements = document.querySelectorAll('.fade-in');
+                
+                fadeElements.forEach(function(element) {
+                    if (isElementInViewport(element)) {
+                        element.classList.add('visible');
+                    }
+                });
+            }
+            
+            // Helper function to check if element is in viewport
+            function isElementInViewport(el) {
+                const rect = el.getBoundingClientRect();
+                return (
+                    rect.top <= (window.innerHeight || document.documentElement.clientHeight) * 0.85 &&
+                    rect.bottom >= 0
+                );
+            }
+        });
+    </script>
+</body>
+</html> 
