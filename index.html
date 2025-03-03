@@ -1258,6 +1258,33 @@
             font-weight: 600 !important;
             color: #202124 !important;
         }
+
+        /* Add back to home button styles */
+        .back-home-btn {
+            background: transparent;
+            color: #5f6368;
+            border: 1px solid #dadce0;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: block;
+            width: fit-content;
+            margin: 16px auto 0;
+            text-decoration: none;
+        }
+
+        .back-home-btn span {
+            margin-right: 4px;
+        }
+
+        .back-home-btn:hover {
+            background-color: #f1f3f4;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(60,64,67,0.15);
+        }
     </style>
 </head>
 <body>
@@ -1353,6 +1380,9 @@
         <button class="login-button" onclick="handleAuthClick()">
             Sign in with Google <span class="emoji-animate">🚀</span>
         </button>
+        <a href="https://easyemailai.com" class="back-home-btn">
+            <span>←</span> Back to Home
+        </a>
     </div>
     <div id="compose-modal" class="modal" style="display: none;">
         <div class="modal-content">
