@@ -26,95 +26,58 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
-async function handleAuthClick() {
-    const loginButton = document.getElementById('login-button');
-    const errorDiv = document.getElementById('login-error');
-    const errorMessage = document.getElementById('error-message');
-
-    try {
-        // Disable button and show loading state
-        loginButton.disabled = true;
-        loginButton.classList.add('loading');
-        errorDiv.classList.remove('visible');
-
-        // Initialize the API if not already done
-        if (!gapi.client) {
-            await initializeAPI();
-        }
-
-        const response = await gapi.auth2.getAuthInstance().signIn({
-            prompt: 'select_account'
-        });
-
-        await handleAuthResponse(response);
-
-        // Hide login container and show app
-        document.getElementById('login-container').style.display = 'none';
-        document.getElementById('app').style.display = 'block';
-
-        // Load initial emails
-        await refreshEmails(0, true);
-
-    } catch (error) {
-        console.error('Authentication error:', error);
-        errorMessage.textContent = getErrorMessage(error);
-        errorDiv.classList.add('visible');
-    } finally {
-        // Reset button state
-        loginButton.disabled = false;
-        loginButton.classList.remove('loading');
-    }
-}
-
-function getErrorMessage(error) {
-    if (error.error === 'popup_closed_by_user') {
-        return 'Sign in was cancelled. Please try again.';
-    } else if (error.error === 'access_denied') {
-        return 'Access was denied. Please grant the required permissions.';
-    } else if (error.error === 'immediate_failed') {
-        return 'Automatic sign-in failed. Please try signing in manually.';
-    } else if (error.message && error.message.includes('network')) {
-        return 'Network error. Please check your internet connection.';
-    }
-    return 'An error occurred during sign in. Please try again.';
-}
-
-async function initializeAPI() {
-    try {
-        await new Promise((resolve, reject) => {
-            gapi.load('client:auth2', {
-                callback: resolve,
-                onerror: reject,
-                timeout: 10000,
-                ontimeout: () => reject(new Error('Timeout loading Google API'))
+function initializeAPI() {
+    console.log('Initializing Google API...');
+    gapi.load('client', async () => {
+        try {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: [DISCOVERY_DOC],
             });
-        });
+            gapiInited = true;
+            console.log('GAPI initialized');
 
-        await gapi.client.init({
-            apiKey: API_KEY,
-            clientId: CLIENT_ID,
-            discoveryDocs: [DISCOVERY_DOC],
-            scope: SCOPES
-        });
+            // Check if we should auto-login
+            const isAuthenticated = localStorage.getItem('isAuthenticated');
+            
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: handleAuthResponse,
+                prompt: 'consent',
+                include_granted_scopes: true
+            });
+            gisInited = true;
+            console.log('GIS initialized');
 
-        // Set up auth instance listeners
-        const authInstance = gapi.auth2.getAuthInstance();
-        authInstance.isSignedIn.listen(updateSigninStatus);
+            // If the user was previously authenticated, try to auto-login
+            if (isAuthenticated === 'true') {
+                console.log('Auto-login attempt');
+                tokenClient.requestAccessToken({prompt: ''});
+            }
 
-        // Handle initial sign-in state
-        updateSigninStatus(authInstance.isSignedIn.get());
-
-    } catch (error) {
-        console.error('Error initializing API:', error);
-        throw new Error('Failed to initialize Google API. Please refresh the page and try again.');
-    }
+            console.log('Google API initialized successfully');
+        } catch (error) {
+            console.error('Error initializing API:', error);
+        }
+    });
 }
 
-function updateSigninStatus(isSignedIn) {
-    if (isSignedIn) {
-        const user = gapi.auth2.getAuthInstance().currentUser.get();
-        const profile = user.getBasicProfile();
-        document.getElementById('user-greeting').textContent = `Hello, ${profile.getGivenName()}!`;
+function handleAuthClick() {
+    console.log('Auth click - gapiInited:', gapiInited, 'gisInited:', gisInited);
+    if (!gapiInited || !gisInited) {
+        console.log('API not initialized yet');
+        return;
+    }
+
+    console.log('Requesting access token...');
+    try {
+        tokenClient.requestAccessToken({
+            prompt: 'consent' // Force re-consent to ensure all scopes are granted
+        });
+        console.log('Token request sent successfully');
+    } catch (err) {
+        console.error('Error requesting token:', err);
     }
 }
 
@@ -149,13 +112,12 @@ async function handleAuthResponse(response) {
         
         // Refresh emails after login
         console.log('Refreshing emails after login...');
-        await refreshEmails();
+        refreshEmails();
         
         console.log('Login process completed successfully');
         
     } catch (error) {
         console.error('Error during login process:', error);
-        throw error; // Propagate error to be handled by caller
     }
 }
 
@@ -1059,69 +1021,69 @@ function detectUserIntent(message) {
     return { type: 'chat', confidence: 'high' };
 }
 
-function handleConfirmedAction(action, messages) {
+function handleConfirmedAction(action, messagesContainer) {
     if (action === 'move') {
+        // Get all message elements
+        const messageElements = messagesContainer.querySelectorAll('.chat-message');
+        const messages = Array.from(messageElements).map(el => ({
+            role: el.classList.contains('ai') ? 'assistant' : 'user',
+            content: el.textContent.trim()
+        }));
+        
         // First move the content
         const success = moveLastAIMessageToCompose(messages);
         
         // Only show confirmation if we successfully moved content
         if (success) {
-            messages.innerHTML += `
+            messagesContainer.innerHTML += `
                 <div class="chat-message ai">
                     I've moved the response to the compose area. Let me know if you need any changes!
                 </div>
             `;
         } else {
-            messages.innerHTML += `
+            messagesContainer.innerHTML += `
                 <div class="chat-message ai">
                     I couldn't find the last response to move. Would you like me to generate a new one?
                 </div>
             `;
         }
     }
-    messages.scrollTop = messages.scrollHeight;
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
 function moveLastAIMessageToCompose(messages) {
-    const aiMessages = messages.querySelectorAll('.chat-message.ai');
+    // Find the last AI message that looks like an email
     let emailContent = null;
-    let foundQuestion = false;
-    
-    // First pass: find the confirmation question
-    for (let i = aiMessages.length - 1; i >= 0; i--) {
-        const message = aiMessages[i];
-        if (message.textContent.includes('Is this reply good to move to compose')) {
-            foundQuestion = true;
-            // The email content should be the message right before this question
-            if (i > 0) {
-                emailContent = aiMessages[i - 1];
-            }
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const message = messages[i];
+        if (message.role === 'assistant' && 
+            message.content.includes('Subject:') && 
+            !message.content.includes('Would you like me to') &&
+            !message.content.includes('I\'ve moved')) {
+            emailContent = message.content;
             break;
         }
     }
-    
-    if (emailContent && foundQuestion) {
-        document.getElementById('compose-body').value = emailContent.textContent;
-        return true;
+
+    if (!emailContent) {
+        console.log('No email content found in messages');
+        return false;
     }
-    
-    // Fallback: look for the last non-system message if we didn't find the specific pattern
-    for (let i = aiMessages.length - 1; i >= 0; i--) {
-        const message = aiMessages[i];
-        // Skip all system messages and questions
-        if (!message.textContent.includes('Would you like') && 
-            !message.textContent.includes('I\'ve moved') &&
-            !message.textContent.includes('Okay, let me know') &&
-            !message.textContent.includes('Great! If you have') &&
-            !message.textContent.includes('Is this reply good') &&
-            !message.textContent.includes('Typing...')) {
-            
-            document.getElementById('compose-body').value = message.textContent;
-            return true;
-        }
-    }
-    
-    return false;
+
+    // Extract subject and body
+    const subjectMatch = emailContent.match(/Subject: (.*?)(?:\n|$)/);
+    const subject = subjectMatch ? subjectMatch[1].trim() : '';
+
+    // Get everything after "Subject: " line
+    const bodyStartIndex = emailContent.indexOf('\n', emailContent.indexOf('Subject:'));
+    const body = bodyStartIndex !== -1 ? emailContent.substring(bodyStartIndex).trim() : emailContent;
+
+    // Set the values in the compose modal
+    document.getElementById('compose-subject').value = subject;
+    document.getElementById('compose-body').value = body;
+
+    console.log('Email content moved to compose area:', { subject, body });
+    return true;
 }
 
 async function performSearch() {
