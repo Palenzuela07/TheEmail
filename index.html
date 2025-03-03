@@ -1237,6 +1237,27 @@
             color: #202124;
             font-size: 14px;
         }
+
+        .email-item.email-read {
+            background-color: #f2f2f2 !important;
+            color: #666 !important;
+        }
+        
+        .email-item.email-read .email-subject,
+        .email-item.email-read .email-snippet {
+            color: #5f6368 !important;
+            font-weight: normal !important;
+        }
+        
+        .email-item:not(.email-read) {
+            background-color: white !important;
+            border-left: 4px solid #1a73e8 !important;
+        }
+        
+        .email-item:not(.email-read) .email-subject {
+            font-weight: 600 !important;
+            color: #202124 !important;
+        }
     </style>
 </head>
 <body>
