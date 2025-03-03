@@ -4,7 +4,7 @@ const API_KEY = 'REDACTED_GOOGLE_API_KEY';
 
 // Discovery doc URL for APIs used by the quickstart
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest';
-const SCOPES = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose';
+const SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose';
 
 // Add this at the top with other constants
 const OPENAI_API_KEY = 'REDACTED_OPENAI_API_KEY';
@@ -27,6 +27,7 @@ const MAX_RETRY_ATTEMPTS = 3;
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
 function initializeAPI() {
+    console.log('Initializing Google API...');
     gapi.load('client', async () => {
         try {
             await gapi.client.init({
@@ -34,15 +35,26 @@ function initializeAPI() {
                 discoveryDocs: [DISCOVERY_DOC],
             });
             gapiInited = true;
+            console.log('GAPI initialized');
 
+            // Check if we should auto-login
+            const isAuthenticated = localStorage.getItem('isAuthenticated');
+            
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/gmail.modify',
+                scope: SCOPES,
                 callback: handleAuthResponse,
-                ux_mode: 'redirect',
+                prompt: 'consent',
                 include_granted_scopes: true
             });
             gisInited = true;
+            console.log('GIS initialized');
+
+            // If the user was previously authenticated, try to auto-login
+            if (isAuthenticated === 'true') {
+                console.log('Auto-login attempt');
+                tokenClient.requestAccessToken({prompt: ''});
+            }
 
             console.log('Google API initialized successfully');
         } catch (error) {
@@ -52,28 +64,38 @@ function initializeAPI() {
 }
 
 function handleAuthClick() {
+    console.log('Auth click - gapiInited:', gapiInited, 'gisInited:', gisInited);
     if (!gapiInited || !gisInited) {
         console.log('API not initialized yet');
         return;
     }
 
-    tokenClient.requestAccessToken({
-        prompt: 'consent' // Force re-consent to ensure all scopes are granted
-    });
+    console.log('Requesting access token...');
+    try {
+        tokenClient.requestAccessToken({
+            prompt: 'consent' // Force re-consent to ensure all scopes are granted
+        });
+        console.log('Token request sent successfully');
+    } catch (err) {
+        console.error('Error requesting token:', err);
+    }
 }
 
 async function handleAuthResponse(response) {
+    console.log('Auth response received:', response);
     if (response.error !== undefined) {
         console.error('Auth error:', response.error);
         return;
     }
     
     try {
+        console.log('Getting user profile...');
         const profile = await gapi.client.gmail.users.getProfile({
             'userId': 'me'
         });
         
         userEmail = profile.result.emailAddress;
+        console.log('User email:', userEmail);
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userEmail', userEmail);
         
@@ -85,16 +107,19 @@ async function handleAuthResponse(response) {
         document.querySelector('.email-tabs').style.display = 'flex';
         
         // Switch to primary tab immediately after login
+        console.log('Switching to primary tab...');
         await switchTab('primary');
         
         // Automatically refresh emails after login
+        console.log('Refreshing emails...');
         refreshEmails();
         
         // Simulate a click on the refresh button
         document.querySelector('.refresh-btn').click();
+        console.log('Login process completed successfully');
         
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error during login process:', error);
     }
 }
 

@@ -38,6 +38,10 @@
             position: relative;
             z-index: 10;
             animation: fadeIn 0.6s ease-out;
+            margin: 0 auto;
+            /* Prevent email styles from affecting login */
+            min-width: auto;
+            overflow: visible;
         }
 
         #login-container h1 {
@@ -76,6 +80,10 @@
             justify-content: center;
             gap: 8px;
             box-shadow: 0 4px 6px rgba(26, 115, 232, 0.2);
+            position: relative;
+            z-index: 20;
+            max-width: 100%;
+            width: auto;
         }
 
         .login-button:hover {
@@ -402,7 +410,7 @@
         .email-viewer {
             background: white !important;
             color: #202124 !important;
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 0;
             border-radius: 16px;
@@ -456,8 +464,7 @@
             line-height: 1.6;
             padding: 12px 16px;
             overflow-x: auto;
-            max-width: 640px !important;
-            min-width: 640px;
+            max-width: 95% !important;
             width: 100%;
             box-sizing: border-box;
             margin: 0 auto;
@@ -493,7 +500,7 @@
         .email-full-header {
             padding: 12px 16px;
             border-bottom: 1px solid #eceff1;
-            max-width: 640px;
+            max-width: 95%;
             margin: 0 auto;
         }
 
