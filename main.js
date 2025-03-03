@@ -26,58 +26,95 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
-function initializeAPI() {
-    console.log('Initializing Google API...');
-    gapi.load('client', async () => {
-        try {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: [DISCOVERY_DOC],
-            });
-            gapiInited = true;
-            console.log('GAPI initialized');
+async function handleAuthClick() {
+    const loginButton = document.getElementById('login-button');
+    const errorDiv = document.getElementById('login-error');
+    const errorMessage = document.getElementById('error-message');
 
-            // Check if we should auto-login
-            const isAuthenticated = localStorage.getItem('isAuthenticated');
-            
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: handleAuthResponse,
-                prompt: 'consent',
-                include_granted_scopes: true
-            });
-            gisInited = true;
-            console.log('GIS initialized');
+    try {
+        // Disable button and show loading state
+        loginButton.disabled = true;
+        loginButton.classList.add('loading');
+        errorDiv.classList.remove('visible');
 
-            // If the user was previously authenticated, try to auto-login
-            if (isAuthenticated === 'true') {
-                console.log('Auto-login attempt');
-                tokenClient.requestAccessToken({prompt: ''});
-            }
-
-            console.log('Google API initialized successfully');
-        } catch (error) {
-            console.error('Error initializing API:', error);
+        // Initialize the API if not already done
+        if (!gapi.client) {
+            await initializeAPI();
         }
-    });
+
+        const response = await gapi.auth2.getAuthInstance().signIn({
+            prompt: 'select_account'
+        });
+
+        await handleAuthResponse(response);
+
+        // Hide login container and show app
+        document.getElementById('login-container').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+
+        // Load initial emails
+        await refreshEmails(0, true);
+
+    } catch (error) {
+        console.error('Authentication error:', error);
+        errorMessage.textContent = getErrorMessage(error);
+        errorDiv.classList.add('visible');
+    } finally {
+        // Reset button state
+        loginButton.disabled = false;
+        loginButton.classList.remove('loading');
+    }
 }
 
-function handleAuthClick() {
-    console.log('Auth click - gapiInited:', gapiInited, 'gisInited:', gisInited);
-    if (!gapiInited || !gisInited) {
-        console.log('API not initialized yet');
-        return;
+function getErrorMessage(error) {
+    if (error.error === 'popup_closed_by_user') {
+        return 'Sign in was cancelled. Please try again.';
+    } else if (error.error === 'access_denied') {
+        return 'Access was denied. Please grant the required permissions.';
+    } else if (error.error === 'immediate_failed') {
+        return 'Automatic sign-in failed. Please try signing in manually.';
+    } else if (error.message && error.message.includes('network')) {
+        return 'Network error. Please check your internet connection.';
     }
+    return 'An error occurred during sign in. Please try again.';
+}
 
-    console.log('Requesting access token...');
+async function initializeAPI() {
     try {
-        tokenClient.requestAccessToken({
-            prompt: 'consent' // Force re-consent to ensure all scopes are granted
+        await new Promise((resolve, reject) => {
+            gapi.load('client:auth2', {
+                callback: resolve,
+                onerror: reject,
+                timeout: 10000,
+                ontimeout: () => reject(new Error('Timeout loading Google API'))
+            });
         });
-        console.log('Token request sent successfully');
-    } catch (err) {
-        console.error('Error requesting token:', err);
+
+        await gapi.client.init({
+            apiKey: API_KEY,
+            clientId: CLIENT_ID,
+            discoveryDocs: [DISCOVERY_DOC],
+            scope: SCOPES
+        });
+
+        // Set up auth instance listeners
+        const authInstance = gapi.auth2.getAuthInstance();
+        authInstance.isSignedIn.listen(updateSigninStatus);
+
+        // Handle initial sign-in state
+        updateSigninStatus(authInstance.isSignedIn.get());
+
+    } catch (error) {
+        console.error('Error initializing API:', error);
+        throw new Error('Failed to initialize Google API. Please refresh the page and try again.');
+    }
+}
+
+function updateSigninStatus(isSignedIn) {
+    if (isSignedIn) {
+        const user = gapi.auth2.getAuthInstance().currentUser.get();
+        const profile = user.getBasicProfile();
+        document.getElementById('user-greeting').textContent = `Hello, ${profile.getGivenName()}!`;
     }
 }
 
@@ -112,12 +149,13 @@ async function handleAuthResponse(response) {
         
         // Refresh emails after login
         console.log('Refreshing emails after login...');
-        refreshEmails();
+        await refreshEmails();
         
         console.log('Login process completed successfully');
         
     } catch (error) {
         console.error('Error during login process:', error);
+        throw error; // Propagate error to be handled by caller
     }
 }
 
