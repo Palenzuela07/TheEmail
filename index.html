@@ -410,7 +410,8 @@
         .email-viewer {
             background: white !important;
             color: #202124 !important;
-            max-width: 1000px;
+            max-width: 90%;
+            width: 1200px;
             margin: 0 auto;
             padding: 0;
             border-radius: 16px;
@@ -424,7 +425,7 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
-            padding-bottom: 10px;
+            padding: 16px;
             border-bottom: 1px solid #eceff1;
             position: relative;
             z-index: 2;
@@ -444,6 +445,26 @@
         .back-button:hover {
             background: #f1f3f4;
         }
+        
+        .email-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .email-actions button {
+            background: #f1f3f4;
+            color: #202124;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .email-actions button:hover {
+            background: #e8eaed;
+        }
 
         .email-content-wrapper {
             position: relative;
@@ -462,9 +483,8 @@
             color: #202124 !important;
             font-family: 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
             line-height: 1.6;
-            padding: 12px 16px;
+            padding: 20px;
             overflow-x: auto;
-            max-width: 95% !important;
             width: 100%;
             box-sizing: border-box;
             margin: 0 auto;
@@ -756,7 +776,7 @@
             position: fixed;
             bottom: 0;
             right: 24px;
-            width: 510px;
+            width: 800px;
             height: 600px;
             background: white;
             z-index: 1000;
@@ -855,23 +875,25 @@
             gap: 0;
             height: 100%;
             position: relative;
+            background: white;
         }
 
         .ai-suggestions {
             width: 40%;
-            padding-right: 16px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
             gap: 4px;
             height: 100%;
+            background: white;
         }
 
         .compose-area {
             width: 60%;
-            padding-left: 32px;
-            padding-right: 16px;
+            padding: 16px 16px 16px 32px;
             position: relative;
             height: 100%;
+            background: white;
         }
 
         .compose-area::before {
