@@ -609,16 +609,47 @@
 
         .email-list-header {
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 16px;
-            border-bottom: 1px solid #eceff1;
-            background: #f8f9fa;
+            position: relative;
+            background-color: #f1f3f4;
+            padding: 6px 16px 6px 120px; /* Reduced top/bottom padding to 6px */
+            border-radius: 8px 8px 0 0;
+            height: 32px; /* Reduced fixed height from 40px to 32px */
+            box-sizing: border-box;
+        }
+
+        .header-nav-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: 0;
+            margin-right: auto;
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #5f6368;
+            font-size: 14px; /* Reduced from 16px */
+            cursor: pointer;
+            padding: 3px 7px; /* Reduced padding */
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            height: 24px; /* Added explicit height */
+            line-height: 1;
         }
 
         .email-count {
+            font-size: 12px; /* Reduced from 13px */
             color: #5f6368;
-            font-size: 0.9em;
+            white-space: nowrap;
+            padding: 0 4px;
+            line-height: 1;
         }
 
         .email-content-frame {
@@ -733,6 +764,7 @@
             justify-content: center;
             gap: 8px;
             margin-left: 60px;
+            transition: all 0.2s ease-in-out;
         }
 
         .email-tab:hover {
@@ -741,9 +773,11 @@
         }
 
         .email-tab.active {
-            color: #1a73e8;
-            font-weight: 500;
-            background-color: #c2e7ff;
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
         .email-tab.active::after {
@@ -752,8 +786,12 @@
             bottom: -1px;
             left: 0;
             right: 0;
-            height: 3px;
+            height: 5px;
             background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
         }
 
         .tab-icon {
@@ -1337,6 +1375,339 @@
             color: #1a73e8 !important;
             font-weight: 500 !important;
             border-left: 3px solid #1a73e8 !important;
+        }
+
+        /* Enhanced styling for active email tabs */
+        .email-tab.active {
+            color: #001d35 !important;
+            font-weight: 600 !important;
+            background-color: #c2e7ff !important;
+        }
+
+        .email-tab.active::after {
+            content: '' !important;
+            position: absolute !important;
+            bottom: -1px !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 4px !important;
+            background: #1a73e8 !important;
+            display: block !important;
+        }
+        
+        /* Add animation for tab selection */
+        .email-tab {
+            transition: all 0.2s ease-in-out !important;
+        }
+
+        .email-tab.active {
+            transform: translateY(-2px) !important;
+        }
+
+        /* Ensure tab text is clearly visible when active */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Add blue vertical line for active sidebar categories */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+        /* CATEGORY TABS STYLING - CONSOLIDATED AND ENHANCED */
+        /* Base styling for all tabs */
+        .email-tab {
+            flex: 1;
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-left: 60px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        /* Active tab styling with prominent blue underline */
+        .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* The blue underline for active tab */
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
+        }
+
+        @keyframes underlineAppear {
+            from { opacity: 0; transform: scaleX(0.7); }
+            to { opacity: 1; transform: scaleX(1); }
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Sidebar active items styling */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+            padding-left: 32px;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+        /* CATEGORY TABS STYLING - CONSOLIDATED AND ENHANCED */
+        /* Base styling for all tabs */
+        .email-tab {
+            flex: 1;
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-left: 60px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        /* Active tab styling with prominent blue underline */
+        .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* The blue underline for active tab */
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
+        }
+
+        @keyframes underlineAppear {
+            from { opacity: 0; transform: scaleX(0.7); }
+            to { opacity: 1; transform: scaleX(1); }
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Sidebar active items styling */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+            padding-left: 32px;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+
+        /* SUPER SPECIFIC STYLING FOR ACTIVE EMAIL CATEGORY TABS */
+        #email-tabs .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+            position: relative !important;
+            z-index: 10 !important;
+        }
+
+        /* Extra prominent blue underline for active tab */
+        #email-tabs .email-tab.active::after {
+            content: '' !important;
+            position: absolute !important;
+            bottom: -1px !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 6px !important; /* Even thicker underline */
+            background: #1a73e8 !important;
+            display: block !important;
+            border-radius: 2px 2px 0 0 !important;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5) !important;
+            z-index: 20 !important;
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        #email-tabs .email-tab.active .tab-icon,
+        #email-tabs .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        .header-nav-controls {
+            display: flex;
+            align-items: center;
+            margin-left: 0;
+            margin-right: auto;
+            position: absolute;
+            left: 16px;
+        }
+        
+        .header-spacer {
+            flex-grow: 1;
+        }
+        
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #5f6368;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .nav-btn:hover:not([disabled]) {
+            background-color: #f1f3f4;
+            color: #1a73e8;
+        }
+        
+        .nav-btn[disabled] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Ensure email list header has proper spacing for absolute positioned controls */
+        .email-list-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px 16px 16px 120px; /* Add left padding to make room for controls */
+            border-bottom: 1px solid #eceff1;
+            background: #f8f9fa;
+            position: relative; /* For absolute positioning of controls */
+        }
+        
+        /* Navigation controls styling */
+        .header-nav-controls {
+            display: flex;
+            align-items: center;
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+        }
+        
+        .email-header-center {
+            flex: 1;
+            text-align: center;
+            color: #5f6368;
+            font-size: 14px;
+            font-weight: 500;
+            visibility: hidden; /* Hide the text but keep the element for spacing */
+        }
+        
+        .email-count {
+            color: #5f6368;
+            font-size: 0.9em;
+            margin: 0 8px;
+            white-space: nowrap;
+        }
+        
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #5f6368;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .nav-btn:hover:not([disabled]) {
+            background-color: #f1f3f4;
+            color: #1a73e8;
+        }
+        
+        .nav-btn[disabled] {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Email list header styling */
+        .email-list-header {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid #eceff1;
+            background: #f8f9fa;
+            position: relative;
+            height: 48px; /* Fixed height for consistency */
         }
     </style>
 </head>

@@ -37,9 +37,7 @@ function initializeAPI() {
             gapiInited = true;
             console.log('GAPI initialized');
 
-            // Check if we should auto-login
-            const isAuthenticated = localStorage.getItem('isAuthenticated');
-            
+            // Initialize the token client but don't auto-login
             tokenClient = google.accounts.oauth2.initTokenClient({
                 client_id: CLIENT_ID,
                 scope: SCOPES,
@@ -49,12 +47,9 @@ function initializeAPI() {
             });
             gisInited = true;
             console.log('GIS initialized');
-
-            // If the user was previously authenticated, try to auto-login
-            if (isAuthenticated === 'true') {
-                console.log('Auto-login attempt');
-                tokenClient.requestAccessToken({prompt: ''});
-            }
+            
+            // Remove the auto-login code to ensure user must click the button
+            // The handleAuthClick function will be called when the user clicks the login button
 
             console.log('Google API initialized successfully');
         } catch (error) {
@@ -126,69 +121,72 @@ function isOnline() {
 }
 
 async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
-    if (!isOnline()) {
-        throw new Error('No internet connection');
-    }
-
     try {
+        if (!isOnline()) {
+            throw new Error('You are offline. Please check your internet connection and try again.');
+        }
+
+        const pageToken = page > 1 ? sessionStorage.getItem(`pageToken_${filter}_${page - 1}`) : null;
         const query = getQueryForFilter(filter);
-        
-        const response = await withTimeout(
-            gapi.client.gmail.users.messages.list({
-                'userId': 'me',
-                'maxResults': EMAILS_PER_PAGE,
-                'q': query,
-                'pageToken': pageTokens[page] || undefined,
-                'orderBy': 'date'
-            }),
-            10000 // 10-second timeout
-        );
+        const maxResults = 50;
 
-        if (!response.result.messages) {
-            return [];
-        }
+        console.log(`Fetching emails for filter: ${filter}, page: ${page}, query: ${query}`);
 
-        // Store next page token
-        if (response.result.nextPageToken) {
-            pageTokens[page + 1] = response.result.nextPageToken;
-        } else {
-            delete pageTokens[page + 1];
-        }
+        const response = await gapi.client.gmail.users.messages.list({
+            userId: 'me',
+            q: query,
+            maxResults: maxResults,
+            pageToken: pageToken
+        });
 
-        const emails = await Promise.all(response.result.messages.map(async message => {
-            const emailDetails = await gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
-            });
-            
-            const headers = emailDetails.result.payload.headers;
-            const labelIds = emailDetails.result.labelIds || [];
-            const isStarred = labelIds.includes('STARRED');
-            const isImportant = labelIds.includes('IMPORTANT');
-            const isUnread = labelIds.includes('UNREAD');
+        // Log the response to debug
+        console.log('Gmail API response:', response);
+
+        // Ensure we have a valid resultSizeEstimate
+        const resultSizeEstimate = response.result.resultSizeEstimate || 0;
+        console.log(`Total emails found: ${resultSizeEstimate}`);
+
+        if (response.result.messages && response.result.messages.length > 0) {
+            // Store next page token if available
+            if (response.result.nextPageToken) {
+                sessionStorage.setItem(`pageToken_${filter}_${page}`, response.result.nextPageToken);
+            }
+
+            // Fetch full details for each message
+            const messages = await Promise.all(
+                response.result.messages.map(async (message) => {
+                    const fullMessage = await gapi.client.gmail.users.messages.get({
+                        userId: 'me',
+                        id: message.id,
+                        format: 'full'
+                    });
+                    return fullMessage.result;
+                })
+            );
 
             return {
-                id: message.id,
-                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred,
-                isImportant,
-                isUnread,
-                labelIds
+                messages: messages,
+                nextPageToken: response.result.nextPageToken,
+                resultSizeEstimate: resultSizeEstimate
             };
-        }));
-
-        return emails;
-
+        } else {
+            console.log('No emails found for this filter');
+            return {
+                messages: [],
+                nextPageToken: null,
+                resultSizeEstimate: 0
+            };
+        }
     } catch (error) {
-        if (retryCount < MAX_RETRY_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        console.error('Error listing emails:', error);
+        
+        // Handle rate limiting or network errors with retry
+        if (retryCount < 3 && (error.status === 429 || error.status === 500 || error.status === 503 || error.message.includes('offline'))) {
+            console.log(`Retrying listEmails (attempt ${retryCount + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
             return listEmails(page, filter, retryCount + 1);
         }
+        
         throw error;
     }
 }
@@ -215,68 +213,121 @@ function getQueryForFilter(filter) {
 }
 
 function displayEmails(emails) {
-    document.getElementById('login-container').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    
+    console.log('Displaying emails:', emails);
     const emailList = document.getElementById('emailList');
     
-    if (!emails || emails.length === 0) {
-        emailList.innerHTML = `
-            <div style="padding: 20px; text-align: center;">
-                <p>No emails found.</p>
-            </div>
-        `;
+    // Clear existing emails
+    emailList.innerHTML = '';
+    
+    if (!emails || !emails.messages || emails.messages.length === 0) {
+        emailList.innerHTML = '<div style="text-align: center; padding: 20px;">No emails found</div>';
         return;
     }
     
-    const totalPages = Math.ceil(totalEmails / EMAILS_PER_PAGE);
-    const startIndex = ((currentPage - 1) * EMAILS_PER_PAGE) + 1;
-    const endIndex = startIndex + emails.length - 1;
+    // Calculate email count and pagination info
+    const emailCount = emails.resultSizeEstimate !== undefined ? emails.resultSizeEstimate : emails.messages.length;
+    const startIndex = (currentPage - 1) * 50 + 1;
+    const endIndex = Math.min(startIndex + emails.messages.length - 1, emailCount);
+    const totalPages = Math.max(Math.ceil(emailCount / 50) || 1, currentPage);
     
-    emailList.innerHTML = `
-        <div class="email-list-header">
-            <div class="email-count">
-                Showing ${startIndex}-${endIndex} 
-                of ${totalEmails}
-                <button onclick="changePage(${currentPage - 1})" 
-                        class="nav-btn" 
-                        ${currentPage === 1 ? 'disabled' : ''}>
-                    ←
-                </button>
-                <button onclick="changePage(${currentPage + 1})" 
-                        class="nav-btn" 
-                        ${currentPage === totalPages ? 'disabled' : ''}>
-                    →
-                </button>
-            </div>
-        </div>
-        ${emails.map(email => {
-            console.log(`Email ${email.id} isUnread: ${email.isUnread}, labelIds: ${JSON.stringify(email.labelIds)}`);
-            // Add more distinctive styling based on read status
-            const emailClass = email.isUnread 
-                ? 'email-item' 
-                : 'email-item email-read';
-                
-            return `
-                <div class="${emailClass}" data-id="${email.id}" onclick="openEmail('${email.id}')" style="cursor: pointer;">
-                    <input type="checkbox" class="email-checkbox" onclick="event.stopPropagation()">
-                    <span class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', this.classList.contains('gold-star'))">
-                        ${email.isStarred ? '<span class="gold-star">★</span>' : '☆'}
-                    </span>
-                    ${email.isImportant ? '<span class="email-important" style="color: red;">❗</span>' : ''}
-                    <div class="email-content">
-                        <div class="email-sender">${formatSender(email.from)}</div>
-                        <div class="email-subject">${email.subject}</div>
-                        <div class="email-snippet">${email.snippet}</div>
-                    </div>
-                    <div class="email-date">${formatDate(new Date(email.date))}</div>
+    // Create email list header
+    const emailListHeader = document.createElement('div');
+    emailListHeader.className = 'email-list-header';
+    
+    // Create a center content div for any centered content
+    const centerContent = document.createElement('div');
+    centerContent.className = 'email-header-center';
+    centerContent.textContent = ''; // Empty for cleaner look
+    emailListHeader.appendChild(centerContent);
+    
+    // Create navigation controls for header - positioned absolutely on the left
+    const headerNavControls = document.createElement('div');
+    headerNavControls.className = 'header-nav-controls';
+    
+    // Previous button (left arrow)
+    const prevButton = document.createElement('button');
+    prevButton.className = 'nav-btn';
+    prevButton.innerHTML = '&lt;';
+    prevButton.title = 'Previous page';
+    prevButton.onclick = function() { changePage(currentPage - 1); };
+    prevButton.disabled = currentPage === 1;
+    
+    // Email count display
+    const emailCountDiv = document.createElement('div');
+    emailCountDiv.className = 'email-count';
+    emailCountDiv.textContent = `${startIndex}-${endIndex} of ${emailCount}`;
+    
+    // Next button (right arrow)
+    const nextButton = document.createElement('button');
+    nextButton.className = 'nav-btn';
+    nextButton.innerHTML = '&gt;';
+    nextButton.title = 'Next page';
+    nextButton.onclick = function() { changePage(currentPage + 1); };
+    nextButton.disabled = currentPage === totalPages;
+    
+    // Assemble header navigation in the requested order: count first, then left arrow, then right arrow
+    headerNavControls.appendChild(emailCountDiv);
+    headerNavControls.appendChild(prevButton);
+    headerNavControls.appendChild(nextButton);
+    
+    // Add navigation controls to the header (will be positioned by CSS)
+    emailListHeader.appendChild(headerNavControls);
+    
+    emailList.appendChild(emailListHeader);
+    
+    // Create container for email items
+    const emailItemsContainer = document.createElement('div');
+    emailItemsContainer.className = 'email-items-container';
+    
+    // Add each email
+    emails.messages.forEach(email => {
+        try {
+            const emailItem = document.createElement('div');
+            emailItem.className = 'email-item';
+            emailItem.id = `email-${email.id}`;
+            
+            // Check if email is read
+            const isRead = !email.labelIds.includes('UNREAD');
+            if (isRead) {
+                emailItem.classList.add('email-read');
+            }
+            
+            // Check if email is starred
+            const isStarred = email.labelIds.includes('STARRED');
+            
+            // Safely get headers
+            const fromHeader = email.payload.headers ? email.payload.headers.find(h => h.name === 'From') : null;
+            const subjectHeader = email.payload.headers ? email.payload.headers.find(h => h.name === 'Subject') : null;
+            const dateHeader = email.payload.headers ? email.payload.headers.find(h => h.name === 'Date') : null;
+            
+            const from = fromHeader ? fromHeader.value : 'Unknown';
+            const subject = subjectHeader ? subjectHeader.value : 'No Subject';
+            const date = dateHeader ? dateHeader.value : '';
+            
+            emailItem.innerHTML = `
+                <input type="checkbox" class="email-checkbox">
+                <div class="email-star" onclick="toggleStar('${email.id}', ${isStarred})">
+                    ${isStarred ? '<span class="gold-star">⭐</span>' : '☆'}
                 </div>
+                <div class="email-content" onclick="openEmail('${email.id}')">
+                    <p class="email-sender">${formatSender(from)}</p>
+                    <p class="email-subject">${subject}</p>
+                    <p class="email-snippet">${email.snippet || ''}</p>
+                </div>
+                <div class="email-date">${formatDate(date)}</div>
             `;
-        }).join('')}
-        <div class="pagination">
-            ${generatePaginationControls(currentPage, totalPages)}
-        </div>
-    `;
+            
+            emailItemsContainer.appendChild(emailItem);
+        } catch (err) {
+            console.error('Error rendering email:', err, email);
+        }
+    });
+    
+    emailList.appendChild(emailItemsContainer);
+    
+    // Also add full pagination controls at the bottom for convenience
+    const paginationControls = generatePaginationControls(currentPage, totalPages);
+    emailList.appendChild(paginationControls);
 }
 
 function formatSender(from) {
@@ -284,20 +335,37 @@ function formatSender(from) {
     return match ? match[1] : from;
 }
 
-function formatDate(date) {
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    
-    if (isToday) {
-        return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+function formatDate(dateStr) {
+    try {
+        // Handle invalid or missing date
+        if (!dateStr) return '';
+        
+        // Parse the date string
+        const date = new Date(dateStr);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) {
+            console.warn('Invalid date:', dateStr);
+            return '';
+        }
+        
+        const now = new Date();
+        const isToday = date.toDateString() === now.toDateString();
+        
+        if (isToday) {
+            return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        }
+        
+        const isThisYear = date.getFullYear() === now.getFullYear();
+        if (isThisYear) {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+        
+        return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+    } catch (error) {
+        console.error('Error formatting date:', error, dateStr);
+        return '';
     }
-    
-    const isThisYear = date.getFullYear() === now.getFullYear();
-    if (isThisYear) {
-        return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-    
-    return date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
 function handleSignOut() {
@@ -310,72 +378,120 @@ function handleSignOut() {
 }
 
 function generatePaginationControls(currentPage, totalPages) {
-    let controls = [];
+    // Create a DOM element for pagination
+    const paginationDiv = document.createElement('div');
+    paginationDiv.className = 'pagination';
     
-    controls.push(`
-        <button 
-            onclick="changePage(${currentPage - 1})" 
-            class="page-button" 
-            ${currentPage === 1 ? 'disabled' : ''}>
-            Previous
-        </button>
-    `);
+    // Previous button
+    const prevButton = document.createElement('button');
+    prevButton.className = 'page-button';
+    prevButton.textContent = 'Previous';
+    prevButton.onclick = function() { changePage(currentPage - 1); };
+    if (currentPage === 1) {
+        prevButton.disabled = true;
+    }
+    paginationDiv.appendChild(prevButton);
 
     // First page
     if (currentPage > 3) {
-        controls.push(`
-            <button onclick="changePage(1)" class="page-button">1</button>
-            ${currentPage > 4 ? '<span class="page-info">...</span>' : ''}
-        `);
+        const firstPageButton = document.createElement('button');
+        firstPageButton.className = 'page-button';
+        firstPageButton.textContent = '1';
+        firstPageButton.onclick = function() { changePage(1); };
+        paginationDiv.appendChild(firstPageButton);
+        
+        if (currentPage > 4) {
+            const ellipsis = document.createElement('span');
+            ellipsis.className = 'page-info';
+            ellipsis.textContent = '...';
+            paginationDiv.appendChild(ellipsis);
+        }
     }
 
     // Pages around current page
     for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
-        controls.push(`
-            <button 
-                onclick="changePage(${i})" 
-                class="page-button ${i === currentPage ? 'active' : ''}">
-                ${i}
-            </button>
-        `);
+        const pageButton = document.createElement('button');
+        pageButton.className = i === currentPage ? 'page-button active' : 'page-button';
+        pageButton.textContent = i.toString();
+        pageButton.onclick = function() { changePage(i); };
+        paginationDiv.appendChild(pageButton);
     }
 
     // Last page
     if (currentPage < totalPages - 2) {
-        controls.push(`
-            ${currentPage < totalPages - 3 ? '<span class="page-info">...</span>' : ''}
-            <button onclick="changePage(${totalPages})" class="page-button">${totalPages}</button>
-        `);
+        if (currentPage < totalPages - 3) {
+            const ellipsis = document.createElement('span');
+            ellipsis.className = 'page-info';
+            ellipsis.textContent = '...';
+            paginationDiv.appendChild(ellipsis);
+        }
+        
+        const lastPageButton = document.createElement('button');
+        lastPageButton.className = 'page-button';
+        lastPageButton.textContent = totalPages.toString();
+        lastPageButton.onclick = function() { changePage(totalPages); };
+        paginationDiv.appendChild(lastPageButton);
     }
 
-    controls.push(`
-        <button 
-            onclick="changePage(${currentPage + 1})" 
-            class="page-button" 
-            ${currentPage === totalPages ? 'disabled' : ''}>
-            Next
-        </button>
-    `);
+    // Next button
+    const nextButton = document.createElement('button');
+    nextButton.className = 'page-button';
+    nextButton.textContent = 'Next';
+    nextButton.onclick = function() { changePage(currentPage + 1); };
+    if (currentPage === totalPages) {
+        nextButton.disabled = true;
+    }
+    paginationDiv.appendChild(nextButton);
 
-    return controls.join('');
+    return paginationDiv;
 }
 
 async function changePage(newPage) {
     if (newPage < 1) return;
 
     try {
+        console.log(`Changing to page ${newPage} for filter ${currentFilter}`);
+        
+        // Show loading state
+        document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Loading...</div>';
+        
         // Attempt to fetch emails for the new page
         const emails = await listEmails(newPage, currentFilter);
-        if (emails.length > 0) {
-            currentPage = newPage; // Only update currentPage if emails are successfully fetched
+        
+        // Check if we have valid emails object with messages
+        if (emails && emails.messages && emails.messages.length > 0) {
+            // Update current page
+            currentPage = newPage;
+            
+            // Display the emails
             displayEmails(emails);
+            
+            // Scroll to top
             document.getElementById('emailList').scrollTop = 0;
+            
+            console.log(`Successfully changed to page ${newPage}`);
         } else {
             console.error('No emails returned for page:', newPage);
-            alert('No emails found for this page.');
+            
+            // If we're trying to go to a page that doesn't exist, stay on current page
+            const fallbackEmails = await listEmails(currentPage, currentFilter);
+            displayEmails(fallbackEmails);
+            
+            // Show a message to the user
+            alert('No more emails to display.');
         }
     } catch (error) {
         console.error('Error changing page:', error);
+        
+        // Try to recover by staying on current page
+        try {
+            const fallbackEmails = await listEmails(currentPage, currentFilter);
+            displayEmails(fallbackEmails);
+        } catch (fallbackError) {
+            document.getElementById('emailList').innerHTML = 
+                '<div style="text-align: center; padding: 20px;">Error loading emails. Please try again.</div>';
+        }
+        
         alert('Error loading emails. Please try again.');
     }
 }
@@ -1376,146 +1492,82 @@ function ensureTabsVisible() {
 }
 
 async function switchTab(category) {
-    console.log(`Switching to ${category} tab`);
-    currentFilter = category;
-
-    // Hide AI Settings if visible
-    const settingsContainer = document.getElementById('ai-settings-container');
-    if (settingsContainer) {
-        settingsContainer.style.display = 'none';
-    }
-
-    // Show search bar and email list
-    document.querySelector('.search-bar').style.display = 'flex';
-    document.getElementById('emailList').style.display = 'block';
-    document.querySelector('.email-tabs').style.display = 'flex';
-
-    // Update active states
-    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    if (category === 'primary') {
-        document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
-    } else {
-        const subNavItem = document.querySelector(`.sub-nav-item[onclick*="${category}"]`);
-        if (subNavItem) {
-            subNavItem.classList.add('active');
-        }
-    }
-
-    // Update search placeholder
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.value = '';
-        switch (category) {
-            case 'starred':
-            case 'important':
-            case 'sent':
-                searchInput.placeholder = `Search ${category} emails...`;
-                document.querySelector('.email-tabs').style.display = 'none';
-                break;
-            default:
-                searchInput.placeholder = 'Search emails...';
-                document.querySelector('.email-tabs').style.display = 'flex';
-        }
-    }
-
-    // Show loading state once
-    document.getElementById('emailList').innerHTML = `
-        <div style="text-align: center; padding: 20px;">
-            <p>Loading ${category} emails...</p>
-        </div>
-    `;
-
-    let retryCount = 0;
-    const maxRetries = 3;
-    let success = false;
-
-    while (retryCount < maxRetries && !success) {
-        try {
-            currentPage = 1;
-            const query = getQueryForCategory(category);
-            console.log(`Attempt ${retryCount + 1}: Querying emails with: ${query}`);
-
-            // Get both the count and the latest emails in one attempt
-            const [countResponse, emailsResponse] = await Promise.all([
-                gapi.client.gmail.users.messages.list({
-                    'userId': 'me',
-                    'maxResults': 500,
-                    'q': query
-                }),
-                gapi.client.gmail.users.messages.list({
-                    'userId': 'me',
-                    'maxResults': EMAILS_PER_PAGE,
-                    'q': query,
-                    'orderBy': 'date'
-                })
-            ]);
-
-            if (!countResponse.result.messages || !emailsResponse.result.messages) {
-                throw new Error('No messages found');
-            }
-
-            totalEmails = countResponse.result.resultSizeEstimate || 0;
-
-            const emails = await Promise.all(emailsResponse.result.messages.map(async message => {
-                const emailDetails = await gapi.client.gmail.users.messages.get({
-                    'userId': 'me',
-                    'id': message.id,
-                    'format': 'metadata',
-                    'metadataHeaders': ['Subject', 'From', 'Date']
-                });
-                
-                const headers = emailDetails.result.payload.headers;
-                const labelIds = emailDetails.result.labelIds || [];
-                const isStarred = labelIds.includes('STARRED');
-                const isImportant = labelIds.includes('IMPORTANT');
-                const isUnread = labelIds.includes('UNREAD');
-                
-                // Debug output for unread status
-                console.log(`Email ${message.id} - Labels: ${JSON.stringify(labelIds)} - isUnread: ${isUnread}`);
-
-                return {
-                    id: message.id,
-                    subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                    from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                    date: headers.find(header => header.name === 'Date')?.value || '',
-                    snippet: emailDetails.result.snippet || 'No preview available',
-                    isStarred,
-                    isImportant,
-                    isUnread,
-                    labelIds
-                };
-            }));
-
-            displayEmails(emails);
-            success = true;
-
-        } catch (error) {
-            console.error(`Attempt ${retryCount + 1} failed:`, error);
-            retryCount++;
+    try {
+        // Update UI to show loading state
+        document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Loading...</div>';
+        
+        console.log("Switching to category:", category);
+        
+        // ENHANCED: Clear active class from all tabs first
+        const allTabs = document.querySelectorAll('.email-tab, .sub-nav-item');
+        allTabs.forEach(tab => tab.classList.remove('active'));
+        
+        // ENHANCED: Set active class on the correct email category tab
+        const emailTabs = document.querySelectorAll('#email-tabs .email-tab');
+        emailTabs.forEach(tab => {
+            const tabText = tab.textContent.trim().toLowerCase();
             
-            if (retryCount < maxRetries) {
-                // Wait before retrying
-                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
-            } else {
-                // Only show error if there are no emails currently displayed
-                const currentEmails = document.querySelectorAll('.email-item');
-                if (currentEmails.length === 0) {
-                    document.getElementById('emailList').innerHTML = `
-                        <div style="text-align: center; padding: 20px; color: #d93025;">
-                            <p>Error loading emails. Please try again.</p>
-                            <button onclick="refreshEmails(0, true)" class="nav-btn">Retry</button>
-                        </div>
-                    `;
-                } else {
-                    console.log("Emails already displayed, not showing error message");
-                }
+            if ((category === 'primary' && tabText.includes('inbox')) ||
+                (category === 'promotions' && tabText.includes('promotion')) ||
+                (category === 'social' && tabText.includes('social')) ||
+                (category === 'updates' && tabText.includes('update')) ||
+                (category === 'starred' && tabText.includes('starred')) ||
+                (category === 'important' && tabText.includes('important')) ||
+                (category === 'sent' && tabText.includes('sent'))) {
+                
+                tab.classList.add('active');
+                console.log("Set active class on tab:", tabText);
             }
+        });
+        
+        // ENHANCED: Set active class on sidebar items
+        const sidebarItems = document.querySelectorAll('.sub-nav-item');
+        sidebarItems.forEach(item => {
+            const itemText = item.textContent.trim().toLowerCase();
+            
+            if (itemText.includes(category.toLowerCase())) {
+                item.classList.add('active');
+                console.log("Set active class on sidebar item:", itemText);
+            }
+        });
+        
+        // Hide AI settings if visible
+        const aiSettingsContainer = document.getElementById('ai-settings-container');
+        if (aiSettingsContainer) {
+            aiSettingsContainer.style.display = 'none';
         }
+        
+        // Show email list and tabs
+        document.getElementById('emailList').style.display = 'block';
+        ensureTabsVisible();
+        document.querySelector('.search-bar').style.display = 'flex';
+        
+        // Hide email viewer if open
+        document.getElementById('email-viewer').style.display = 'none';
+        
+        // Load emails for the selected category
+        const emails = await listEmails(1, category);
+        
+        // Display emails
+        displayEmails(emails);
+        
+        // Update current filter
+        currentFilter = category;
+        
+        // Reset pagination to page 1
+        currentPage = 1;
+        
+        // Update URL with the current category
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('category', category);
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        window.history.pushState({ path: newUrl }, '', newUrl);
+        
+    } catch (error) {
+        console.error('Error switching tab:', error);
+        document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Error loading emails. Please try again.</div>';
     }
-}
+} 
 
 function getQueryForCategory(category) {
     switch (category) {
