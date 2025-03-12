@@ -20,7 +20,6 @@ let pageTokens = {};
 let nextPageToken = null;
 let currentEmail = null;
 let currentFilter = 'primary'; // Default filter
-let currentTab = 'primary'; // Store the current tab globally
 
 // Define a maximum number of retry attempts
 const MAX_RETRY_ATTEMPTS = 3;
@@ -505,40 +504,27 @@ function decodeEmailText(text) {
 
 // Update switchSection function
 async function switchSection(section) {
-    console.log('Switching section to:', section);
+    // Close any open email
+    closeEmail();
     
-    // Update the active state of the main navigation items
-    const navItems = document.querySelectorAll('.nav-item');
-    navItems.forEach(item => {
-        item.classList.remove('active');
-        if (item.textContent.toLowerCase().includes(section.toLowerCase())) {
-            item.classList.add('active');
-        }
-    });
+    // Show email tabs
+    const emailTabs = document.querySelector('.email-tabs');
+    emailTabs.style.display = 'flex';
     
-    // Reset sub-navigation items active state
-    const subNavItems = document.querySelectorAll('.sub-nav-item');
-    subNavItems.forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    if (section === 'email') {
-        document.getElementById('email-viewer').style.display = 'none';
-        document.getElementById('emailList').style.display = 'block';
-        document.getElementById('ai-settings-container')?.style.display = 'none';
-        
-        ensureTabsVisible();
-        
-        // If coming from another section, set currentTab to 'primary'
-        if (!['starred', 'important', 'sent'].includes(currentTab)) {
-            currentTab = 'primary';
-        }
-        
-        // Use the current tab when refreshing emails
-        await refreshEmails(0, true);
-    } else if (section === 'ai-settings') {
-        openAISettings();
+    // Hide AI Settings if visible
+    const settingsContainer = document.getElementById('ai-settings-container');
+    if (settingsContainer) {
+        settingsContainer.style.display = 'none';
     }
+    
+    // Update active states
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    
+    // Switch to primary tab immediately
+    await switchTab('primary');
 }
 
 function deleteEmail(emailId) {
@@ -681,31 +667,55 @@ function withTimeout(promise, timeout) {
 
 // Function to refresh emails with retry logic
 async function refreshEmails(retryCount = 0, forceRefresh = false) {
-    const emailList = document.getElementById('emailList');
-    if (!emailList) return;
+    // Don't show any loading state if we have emails displayed
+    const currentEmails = document.querySelectorAll('.email-item');
+    const shouldShowLoading = currentEmails.length === 0;
     
-    if (emailList.getAttribute('data-loading') === 'true' && !forceRefresh) {
-        console.log('Already loading emails...');
-        return;
+    if (shouldShowLoading) {
+        document.getElementById('emailList').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+                <p>Loading your emails...</p>
+            </div>
+        `;
     }
-    
-    if (!isOnline()) {
-        console.log('Device is offline, skipping refresh');
-        return;
-    }
-    
-    emailList.setAttribute('data-loading', 'true');
-    
+
     try {
-        // Use the currentTab instead of hardcoding 'primary'
-        const result = await withTimeout(listEmails(1, currentTab), 20000);
+        // Get current filter and page
+        const activeTab = document.querySelector('.email-tab.active');
+        const currentFilter = activeTab ? activeTab.getAttribute('data-category') : 'primary';
+        const currentPage = parseInt(document.querySelector('.page-button.active')?.textContent) || 1;
+
+        // Load new emails in background
+        const newEmails = await listEmails(currentPage, currentFilter);
         
-        // More code...
+        // Only update display if we have new emails and either:
+        // 1. We had no emails before
+        // 2. Force refresh was requested
+        // 3. The new emails are different from current ones
+        if (newEmails && (currentEmails.length === 0 || forceRefresh || emailsHaveChanged(newEmails))) {
+            displayEmails(newEmails);
+        }
+
+        // Set up next background refresh
+        setTimeout(() => {
+            refreshEmails(0, false);
+        }, 30000); // Refresh every 30 seconds
+
     } catch (error) {
         console.error('Error refreshing emails:', error);
-        // More error handling code...
-    } finally {
-        emailList.setAttribute('data-loading', 'false');
+        
+        // Only show error if we have no emails displayed
+        if (currentEmails.length === 0) {
+            document.getElementById('emailList').innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #d93025;">
+                    <p>Error loading emails. Retrying...</p>
+                </div>
+            `;
+            // Retry after a delay
+            setTimeout(() => {
+                refreshEmails(retryCount + 1, false);
+            }, 2000);
+        }
     }
 }
 
@@ -1351,47 +1361,144 @@ function ensureTabsVisible() {
 }
 
 async function switchTab(category) {
-    console.log(`Switching to tab: ${category}`);
-    currentTab = category; // Update the global current tab
-    
-    // Update UI to reflect the active tab
-    const tabButtons = document.querySelectorAll('.email-tab');
-    tabButtons.forEach(button => {
-        button.classList.remove('active');
-        if (button.textContent.toLowerCase().includes(category.toLowerCase())) {
-            button.classList.add('active');
-        }
-    });
+    console.log(`Switching to ${category} tab`);
+    currentFilter = category;
 
-    // For sub-navigation items
-    const navItems = document.querySelectorAll('.sub-nav-item');
-    navItems.forEach(item => {
-        item.classList.remove('active');
-        if (item.textContent.toLowerCase().includes(category.toLowerCase())) {
-            item.classList.add('active');
-        }
-    });
-
-    // Main navigation items
-    const mainNavItems = document.querySelectorAll('.nav-item');
-    if (['starred', 'important', 'sent'].includes(category)) {
-        // If it's a sub-category, make sure Inbox is active
-        mainNavItems.forEach(item => {
-            if (item.textContent.includes('Inbox')) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
-        });
+    // Hide AI Settings if visible
+    const settingsContainer = document.getElementById('ai-settings-container');
+    if (settingsContainer) {
+        settingsContainer.style.display = 'none';
     }
 
-    // Close any open email
-    closeEmail();
+    // Show search bar and email list
+    document.querySelector('.search-bar').style.display = 'flex';
+    document.getElementById('emailList').style.display = 'block';
+    document.querySelector('.email-tabs').style.display = 'flex';
+
+    // Update active states
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
     
-    try {
-        await listEmails(1, category);
-    } catch (error) {
-        console.error('Error switching tab:', error);
+    if (category === 'primary') {
+        document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    } else {
+        const subNavItem = document.querySelector(`.sub-nav-item[onclick*="${category}"]`);
+        if (subNavItem) {
+            subNavItem.classList.add('active');
+        }
+    }
+
+    // Update search placeholder
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        switch (category) {
+            case 'starred':
+            case 'important':
+            case 'sent':
+                searchInput.placeholder = `Search ${category} emails...`;
+                document.querySelector('.email-tabs').style.display = 'none';
+                break;
+            default:
+                searchInput.placeholder = 'Search emails...';
+                document.querySelector('.email-tabs').style.display = 'flex';
+        }
+    }
+
+    // Show loading state once
+    document.getElementById('emailList').innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <p>Loading ${category} emails...</p>
+        </div>
+    `;
+
+    let retryCount = 0;
+    const maxRetries = 3;
+    let success = false;
+
+    while (retryCount < maxRetries && !success) {
+        try {
+            currentPage = 1;
+            const query = getQueryForCategory(category);
+            console.log(`Attempt ${retryCount + 1}: Querying emails with: ${query}`);
+
+            // Get both the count and the latest emails in one attempt
+            const [countResponse, emailsResponse] = await Promise.all([
+                gapi.client.gmail.users.messages.list({
+                    'userId': 'me',
+                    'maxResults': 500,
+                    'q': query
+                }),
+                gapi.client.gmail.users.messages.list({
+                    'userId': 'me',
+                    'maxResults': EMAILS_PER_PAGE,
+                    'q': query,
+                    'orderBy': 'date'
+                })
+            ]);
+
+            if (!countResponse.result.messages || !emailsResponse.result.messages) {
+                throw new Error('No messages found');
+            }
+
+            totalEmails = countResponse.result.resultSizeEstimate || 0;
+
+            const emails = await Promise.all(emailsResponse.result.messages.map(async message => {
+                const emailDetails = await gapi.client.gmail.users.messages.get({
+                    'userId': 'me',
+                    'id': message.id,
+                    'format': 'metadata',
+                    'metadataHeaders': ['Subject', 'From', 'Date']
+                });
+                
+                const headers = emailDetails.result.payload.headers;
+                const labelIds = emailDetails.result.labelIds || [];
+                const isStarred = labelIds.includes('STARRED');
+                const isImportant = labelIds.includes('IMPORTANT');
+                const isUnread = labelIds.includes('UNREAD');
+                
+                // Debug output for unread status
+                console.log(`Email ${message.id} - Labels: ${JSON.stringify(labelIds)} - isUnread: ${isUnread}`);
+
+                return {
+                    id: message.id,
+                    subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
+                    from: headers.find(header => header.name === 'From')?.value || '(no sender)',
+                    date: headers.find(header => header.name === 'Date')?.value || '',
+                    snippet: emailDetails.result.snippet || 'No preview available',
+                    isStarred,
+                    isImportant,
+                    isUnread,
+                    labelIds
+                };
+            }));
+
+            displayEmails(emails);
+            success = true;
+
+        } catch (error) {
+            console.error(`Attempt ${retryCount + 1} failed:`, error);
+            retryCount++;
+            
+            if (retryCount < maxRetries) {
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            } else {
+                // Only show error if there are no emails currently displayed
+                const currentEmails = document.querySelectorAll('.email-item');
+                if (currentEmails.length === 0) {
+                    document.getElementById('emailList').innerHTML = `
+                        <div style="text-align: center; padding: 20px; color: #d93025;">
+                            <p>Error loading emails. Please try again.</p>
+                            <button onclick="refreshEmails(0, true)" class="nav-btn">Retry</button>
+                        </div>
+                    `;
+                } else {
+                    console.log("Emails already displayed, not showing error message");
+                }
+            }
+        }
     }
 }
 
