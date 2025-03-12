@@ -743,6 +743,7 @@
         .email-tab.active {
             color: #1a73e8;
             font-weight: 500;
+            background-color: #c2e7ff;
         }
 
         .email-tab.active::after {
@@ -1306,6 +1307,36 @@
             background-color: #f1f3f4;
             transform: translateY(-2px);
             box-shadow: 0 2px 4px rgba(60,64,67,0.15);
+        }
+
+        /* Add important styling to ensure active tabs stay blue */
+        .email-tab.active {
+            color: #001d35 !important;
+            font-weight: 500 !important;
+            background-color: #c2e7ff !important;
+        }
+
+        .email-tab.active::after {
+            content: '' !important;
+            position: absolute !important;
+            bottom: -1px !important;
+            left: 0 !important;
+            right: 0 !important;
+            height: 3px !important;
+            background: #1a73e8 !important;
+            display: block !important;
+        }
+        
+        /* Add blue vertical line for active categories */
+        .sub-nav-item {
+            position: relative;
+        }
+        
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 3px solid #1a73e8 !important;
         }
     </style>
 </head>

@@ -667,26 +667,45 @@ function withTimeout(promise, timeout) {
 
 // Function to refresh emails with retry logic
 async function refreshEmails(retryCount = 0, forceRefresh = false) {
-    // Don't show any loading state if we have emails displayed
-    const currentEmails = document.querySelectorAll('.email-item');
-    const shouldShowLoading = currentEmails.length === 0;
-    
-    if (shouldShowLoading) {
-        document.getElementById('emailList').innerHTML = `
-            <div style="text-align: center; padding: 20px;">
-                <p>Loading your emails...</p>
-            </div>
-        `;
+    if (!isOnline()) {
+        if (retryCount < 3) {
+            console.log(`Retrying refresh in 2 seconds... (Attempt ${retryCount + 1})`);
+            setTimeout(() => refreshEmails(retryCount + 1, forceRefresh), 2000);
+        }
+        return;
     }
 
     try {
-        // Get current filter and page
-        const activeTab = document.querySelector('.email-tab.active');
-        const currentFilter = activeTab ? activeTab.getAttribute('data-category') : 'primary';
-        const currentPage = parseInt(document.querySelector('.page-button.active')?.textContent) || 1;
-
-        // Load new emails in background
-        const newEmails = await listEmails(currentPage, currentFilter);
+        // Save the current active tab/category before refreshing
+        const activeTabs = document.querySelectorAll('.email-tab.active');
+        let activeTab = 'primary'; // Default
+        if (activeTabs.length > 0) {
+            const tabElement = activeTabs[0];
+            // Extract the filter from the onclick attribute or use another method to identify the tab
+            const onclickAttr = tabElement.getAttribute('onclick');
+            if (onclickAttr && onclickAttr.includes('switchTab')) {
+                const match = onclickAttr.match(/switchTab\('([^']+)'\)/);
+                if (match && match[1]) {
+                    activeTab = match[1];
+                }
+            }
+        }
+        
+        // Also check for active sub-nav-items (like starred, important, sent)
+        const activeSubNavs = document.querySelectorAll('.sub-nav-item.active');
+        if (activeSubNavs.length > 0) {
+            const subNavElement = activeSubNavs[0];
+            const onclickAttr = subNavElement.getAttribute('onclick');
+            if (onclickAttr && onclickAttr.includes('switchTab')) {
+                const match = onclickAttr.match(/switchTab\('([^']+)'\)/);
+                if (match && match[1]) {
+                    activeTab = match[1];
+                }
+            }
+        }
+        
+        // Now refresh emails with the saved category
+        const newEmails = await listEmails(currentPage, activeTab);
         
         // Only update display if we have new emails and either:
         // 1. We had no emails before
@@ -702,19 +721,10 @@ async function refreshEmails(retryCount = 0, forceRefresh = false) {
         }, 30000); // Refresh every 30 seconds
 
     } catch (error) {
-        console.error('Error refreshing emails:', error);
-        
-        // Only show error if we have no emails displayed
-        if (currentEmails.length === 0) {
-            document.getElementById('emailList').innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #d93025;">
-                    <p>Error loading emails. Retrying...</p>
-                </div>
-            `;
-            // Retry after a delay
-            setTimeout(() => {
-                refreshEmails(retryCount + 1, false);
-            }, 2000);
+        console.error("Failed to refresh emails:", error);
+        if (retryCount < 3) {
+            console.log(`Retrying refresh in 2 seconds... (Attempt ${retryCount + 1})`);
+            setTimeout(() => refreshEmails(retryCount + 1, forceRefresh), 2000);
         }
     }
 }
@@ -732,6 +742,11 @@ function emailsHaveChanged(newEmails) {
 
 // Add this new function for AI help with new messages
 async function checkForAIHelp() {
+    // Prevent auto-refreshes from resetting category
+    if (refreshTimeout) {
+        clearTimeout(refreshTimeout);
+    }
+    
     const bodyField = document.getElementById('compose-body');
     const text = bodyField.value;
     
