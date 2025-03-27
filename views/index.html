@@ -12,7 +12,14 @@
     <meta http-equiv="Expires" content="0">
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async></script>
-    <script src="main.js?v=${Date.now()}" defer></script>
+    <script>
+        window.ENV = {
+            GOOGLE_CLIENT_ID: '<%= GOOGLE_CLIENT_ID %>',
+            GOOGLE_API_KEY: '<%= GOOGLE_API_KEY %>',
+            OPENAI_API_KEY: '<%= OPENAI_API_KEY %>'
+        };
+    </script>
+    <script src="/js/main.js"></script>
     <style>
         /* Login page styles */
         body:has(#login-container:not([style*="display: none"])) {
@@ -66,7 +73,7 @@
         }
 
         .login-button {
-            background-color: #1a73e8;
+            background-color: #d93025;
             color: white;
             border: none;
             padding: 12px 24px;
@@ -79,7 +86,7 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
-            box-shadow: 0 4px 6px rgba(26, 115, 232, 0.2);
+            box-shadow: 0 4px 6px rgba(217, 48, 37, 0.2);
             position: relative;
             z-index: 20;
             max-width: 100%;
@@ -87,9 +94,9 @@
         }
 
         .login-button:hover {
-            background-color: #1557b0;
+            background-color: #c5221f;
             transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(26, 115, 232, 0.3);
+            box-shadow: 0 6px 12px rgba(217, 48, 37, 0.3);
         }
 
         .emoji-animate {

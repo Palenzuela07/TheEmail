@@ -1,13 +1,19 @@
-// Google API credentials
-const CLIENT_ID = '226672443169-6sjeu8f2l6j1du0njr00eatcem6hk9p9.apps.googleusercontent.com';
-const API_KEY = 'REDACTED_GOOGLE_API_KEY';
+document.addEventListener('DOMContentLoaded', () => {
+    // Only try to set up compose button if we're on the app page
+    if (window.location.pathname === '/app') {
+        const composeButton = document.querySelector('.compose-btn');
+        if (composeButton) {
+            composeButton.onclick = () => openComposeModal();
+        }
+    }
+});
 
 // Discovery doc URL for APIs used by the quickstart
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest';
 const SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose';
 
-// Add this at the top with other constants
-const OPENAI_API_KEY = 'REDACTED_OPENAI_API_KEY';
+// OpenAI API key from environment variables
+let OPENAI_API_KEY;
 let conversationHistory = [];
 
 let tokenClient;
@@ -26,36 +32,56 @@ const MAX_RETRY_ATTEMPTS = 3;
 
 document.addEventListener('DOMContentLoaded', initializeAPI);
 
-function initializeAPI() {
-    console.log('Initializing Google API...');
-    gapi.load('client', async () => {
-        try {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: [DISCOVERY_DOC],
-            });
-            gapiInited = true;
-            console.log('GAPI initialized');
+// Remove hardcoded credentials
+let CLIENT_ID;
+let API_KEY;
 
-            // Initialize the token client but don't auto-login
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: handleAuthResponse,
-                prompt: 'consent',
-                include_granted_scopes: true
-            });
-            gisInited = true;
-            console.log('GIS initialized');
-            
-            // Remove the auto-login code to ensure user must click the button
-            // The handleAuthClick function will be called when the user clicks the login button
+// Fetch credentials when needed
+async function initializeAPI() {
+    try {
+        const response = await fetch('/api/auth', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        const credentials = await response.json();
+        
+        CLIENT_ID = credentials.clientId;
+        API_KEY = credentials.apiKey;
+        
+        // Continue with Google API initialization
+        gapi.load('client', async () => {
+            try {
+                await gapi.client.init({
+                    apiKey: API_KEY,
+                    discoveryDocs: [DISCOVERY_DOC],
+                });
+                gapiInited = true;
+                console.log('GAPI initialized');
 
-            console.log('Google API initialized successfully');
-        } catch (error) {
-            console.error('Error initializing API:', error);
-        }
-    });
+                // Initialize the token client but don't auto-login
+                tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: CLIENT_ID,
+                    scope: SCOPES,
+                    callback: handleAuthResponse,
+                    prompt: 'consent',
+                    include_granted_scopes: true
+                });
+                gisInited = true;
+                console.log('GIS initialized');
+                
+                // Remove the auto-login code to ensure user must click the button
+                // The handleAuthClick function will be called when the user clicks the login button
+
+                console.log('Google API initialized successfully');
+            } catch (error) {
+                console.error('Error initializing API:', error);
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching credentials:', error);
+    }
 }
 
 function handleAuthClick() {
