@@ -6,6 +6,44 @@ document.addEventListener('DOMContentLoaded', () => {
             composeButton.onclick = () => openComposeModal();
         }
     }
+
+    // Ensure the toolbar exists in the DOM
+    const toolbar = document.getElementById('selection-toolbar');
+    if (!toolbar) {
+        const newToolbar = document.createElement('div');
+        newToolbar.id = 'selection-toolbar';
+        newToolbar.className = 'selection-toolbar';
+        newToolbar.innerHTML = `
+            <div class="toolbar-actions">
+                <button onclick="starSelected()" class="toolbar-btn" title="Star">
+                    <span class="action-icon">⭐</span>
+                </button>
+                <button onclick="markSelectedAsImportant()" class="toolbar-btn" title="Mark as important">
+                    <span class="action-icon">❗</span>
+                </button>
+                <button onclick="deleteSelected()" class="toolbar-btn delete-btn" title="Delete">
+                    <span class="action-icon">🗑️</span>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(newToolbar);
+    }
+
+    // Add the document click event listener
+    document.addEventListener('click', (event) => {
+        // Check if click is inside email items, toolbar, or any interactive elements
+        const isClickInsideEmail = event.target.closest('.email-item');
+        const isClickInsideToolbar = event.target.closest('#selection-toolbar');
+        const isClickOnCheckbox = event.target.classList.contains('email-checkbox');
+        const isClickOnStar = event.target.closest('.email-star');
+        const isClickOnImportant = event.target.closest('.email-important');
+        
+        // If clicking outside all interactive elements, clear all selections
+        if (!isClickInsideEmail && !isClickInsideToolbar && !isClickOnCheckbox && 
+            !isClickOnStar && !isClickOnImportant) {
+            clearAllSelections();
+        }
+    });
 });
 
 // Discovery doc URL for APIs used by the quickstart
@@ -35,6 +73,10 @@ document.addEventListener('DOMContentLoaded', initializeAPI);
 // Remove hardcoded credentials
 let CLIENT_ID;
 let API_KEY;
+
+// Add these variables at the top with other global variables
+let selectedEmails = new Set();
+const selectionToolbar = document.getElementById('selection-toolbar');
 
 // Fetch credentials when needed
 async function initializeAPI() {
@@ -311,6 +353,7 @@ function displayEmails(emails) {
             const emailItem = document.createElement('div');
             emailItem.className = 'email-item';
             emailItem.id = `email-${email.id}`;
+            emailItem.dataset.id = email.id;
             
             // Check if email is read
             const isRead = !email.labelIds.includes('UNREAD');
@@ -331,9 +374,12 @@ function displayEmails(emails) {
             const date = dateHeader ? dateHeader.value : '';
             
             emailItem.innerHTML = `
-                <input type="checkbox" class="email-checkbox">
-                <div class="email-star" onclick="toggleStar('${email.id}', ${isStarred})">
+                <input type="checkbox" class="email-checkbox" onchange="handleEmailSelection('${email.id}', this)">
+                <div class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', ${isStarred})" style="cursor: pointer;">
                     ${isStarred ? '<span class="gold-star">⭐</span>' : '☆'}
+                </div>
+                <div class="email-important" onclick="event.stopPropagation(); toggleImportant('${email.id}', ${email.labelIds.includes('IMPORTANT')})" style="cursor: pointer;">
+                    ${email.labelIds.includes('IMPORTANT') ? '❗' : '❕'}
                 </div>
                 <div class="email-content" onclick="openEmail('${email.id}')">
                     <p class="email-sender">${formatSender(from)}</p>
@@ -1332,32 +1378,32 @@ async function performSearch() {
 async function toggleStar(emailId, isCurrentlyStarred) {
     try {
         const labelAction = isCurrentlyStarred ? 'remove' : 'add';
-        const labelId = 'STARRED';
-
-        // Update the email's labels
+        
+        // Update Gmail API
         await gapi.client.gmail.users.messages.modify({
             'userId': 'me',
             'id': emailId,
             'resource': {
-                [`${labelAction}LabelIds`]: [labelId]
+                [`${labelAction}LabelIds`]: ['STARRED']
             }
         });
 
-        // Update the UI
+        // Update UI immediately
         const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
         if (starElement) {
             if (isCurrentlyStarred) {
-                starElement.classList.remove('gold-star');
                 starElement.innerHTML = '☆';
+                starElement.onclick = () => toggleStar(emailId, false);
             } else {
-                starElement.classList.add('gold-star');
-                starElement.innerHTML = '<span class="gold-star">★</span>';
+                starElement.innerHTML = '<span class="gold-star">⭐</span>';
+                starElement.onclick = () => toggleStar(emailId, true);
             }
         }
 
-        console.log(`Email ${emailId} ${labelAction}ed to starred.`);
+        console.log(`Email ${emailId} ${labelAction === 'add' ? 'starred' : 'unstarred'}`);
     } catch (error) {
         console.error('Error toggling star:', error);
+        alert('Error updating star status. Please try again.');
     }
 }
 
@@ -1718,5 +1764,185 @@ async function markAsRead(emailId) {
         }
     } catch (error) {
         console.error('Error marking email as read:', error);
+    }
+}
+
+// Update the clearAllSelections function
+function clearAllSelections() {
+    // Clear all checkboxes
+    document.querySelectorAll('.email-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // Remove selected styling from all emails
+    document.querySelectorAll('.email-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    // Hide the toolbar
+    const toolbar = document.getElementById('selection-toolbar');
+    if (toolbar) {
+        toolbar.style.display = 'none';
+    }
+    
+    // Clear the selected emails set
+    selectedEmails.clear();
+}
+
+// Update the handleEmailSelection function
+function handleEmailSelection(emailId, checkbox, event) {
+    // Stop event from bubbling to document click handler
+    if (event) {
+        event.stopPropagation();
+    }
+    
+    if (checkbox.checked) {
+        selectedEmails.add(emailId);
+        document.querySelector(`[data-id="${emailId}"]`).classList.add('selected');
+    } else {
+        selectedEmails.delete(emailId);
+        document.querySelector(`[data-id="${emailId}"]`).classList.remove('selected');
+        
+        // If no emails are selected, hide the toolbar
+        if (selectedEmails.size === 0) {
+            const toolbar = document.getElementById('selection-toolbar');
+            if (toolbar) {
+                toolbar.style.display = 'none';
+            }
+        }
+    }
+    
+    updateToolbarPosition();
+}
+
+// Function to update the toolbar position
+function updateToolbarPosition() {
+    const toolbar = document.getElementById('selection-toolbar');
+    if (selectedEmails.size > 0) {
+        const firstSelectedId = Array.from(selectedEmails)[0];
+        const firstSelectedEmail = document.querySelector(`[data-id="${firstSelectedId}"]`);
+        const rect = firstSelectedEmail.getBoundingClientRect();
+        
+        toolbar.style.display = 'block';
+        toolbar.style.position = 'fixed';
+        toolbar.style.top = `${rect.top + window.scrollY}px`;
+        toolbar.style.left = `${rect.left - 100}px`;
+        toolbar.style.zIndex = '1000';
+    } else {
+        toolbar.style.display = 'none';
+    }
+}
+
+// Add event listeners for scroll and resize
+window.addEventListener('scroll', updateToolbarPosition);
+window.addEventListener('resize', updateToolbarPosition);
+
+// Function to handle starring multiple selected emails
+async function starSelected() {
+    try {
+        // Get the first selected email to determine the action
+        const firstSelectedId = Array.from(selectedEmails)[0];
+        const firstSelectedEmail = document.querySelector(`[data-id="${firstSelectedId}"]`);
+        const isCurrentlyStarred = firstSelectedEmail.querySelector('.gold-star') !== null;
+
+        // Apply the same action to all selected emails at once
+        const labelAction = isCurrentlyStarred ? 'remove' : 'add';
+        
+        for (const emailId of selectedEmails) {
+            await gapi.client.gmail.users.messages.modify({
+                'userId': 'me',
+                'id': emailId,
+                'resource': {
+                    [`${labelAction}LabelIds`]: ['STARRED']
+                }
+            });
+
+            // Update UI
+            const starElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-star`);
+            if (starElement) {
+                if (isCurrentlyStarred) {
+                    starElement.innerHTML = '☆';
+                } else {
+                    starElement.innerHTML = '<span class="gold-star">⭐</span>';
+                }
+            }
+        }
+        
+        // Refresh the email list
+        await refreshEmails(0, true);
+
+    } catch (error) {
+        console.error('Error in starSelected:', error);
+        alert('Error updating starred status. Please try again.');
+    }
+}
+
+// Function to handle marking multiple selected emails as important
+async function markSelectedAsImportant() {
+    try {
+        // Get the first selected email to determine the action
+        const firstSelectedId = Array.from(selectedEmails)[0];
+        const firstSelectedEmail = document.querySelector(`[data-id="${firstSelectedId}"]`);
+        const isCurrentlyImportant = firstSelectedEmail.querySelector('.email-important').textContent === '❗';
+
+        // Apply the same action to all selected emails at once
+        const labelAction = isCurrentlyImportant ? 'remove' : 'add';
+
+        for (const emailId of selectedEmails) {
+            await gapi.client.gmail.users.messages.modify({
+                'userId': 'me',
+                'id': emailId,
+                'resource': {
+                    [`${labelAction}LabelIds`]: ['IMPORTANT']
+                }
+            });
+
+            // Update UI
+            const importantElement = document.querySelector(`.email-item[data-id="${emailId}"] .email-important`);
+            if (importantElement) {
+                if (isCurrentlyImportant) {
+                    importantElement.innerHTML = '❕';
+                } else {
+                    importantElement.innerHTML = '❗';
+                }
+            }
+        }
+        
+        // Refresh the email list
+        await refreshEmails(0, true);
+
+    } catch (error) {
+        console.error('Error in markSelectedAsImportant:', error);
+        alert('Error updating important status. Please try again.');
+    }
+}
+
+// Function to handle deleting multiple selected emails
+async function deleteSelected() {
+    if (confirm('Are you sure you want to delete the selected emails?')) {
+        try {
+            for (const emailId of selectedEmails) {
+                await gapi.client.gmail.users.messages.trash({
+                    'userId': 'me',
+                    'id': emailId
+                });
+            }
+            
+            // Clear selections
+            selectedEmails.clear();
+            
+            // Hide toolbar
+            const toolbar = document.getElementById('selection-toolbar');
+            if (toolbar) {
+                toolbar.style.display = 'none';
+            }
+            
+            // Refresh the email list
+            await refreshEmails(0, true);
+            
+        } catch (error) {
+            console.error('Error deleting emails:', error);
+            alert('Error deleting emails. Please try again.');
+        }
     }
 }
