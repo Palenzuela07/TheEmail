@@ -1611,7 +1611,15 @@ async function switchTab(category) {
         
         // Show email list and tabs
         document.getElementById('emailList').style.display = 'block';
-        ensureTabsVisible();
+        
+        // Hide category tabs for sub-tabs
+        const emailTabsContainer = document.getElementById('email-tabs');
+        if (['starred', 'important', 'sent'].includes(category)) {
+            emailTabsContainer.style.display = 'none';
+        } else {
+            emailTabsContainer.style.display = 'flex';
+        }
+        
         document.querySelector('.search-bar').style.display = 'flex';
         
         // Hide email viewer if open
@@ -1639,7 +1647,7 @@ async function switchTab(category) {
         console.error('Error switching tab:', error);
         document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Error loading emails. Please try again.</div>';
     }
-} 
+}
 
 function getQueryForCategory(category) {
     switch (category) {
