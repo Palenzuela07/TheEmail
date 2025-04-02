@@ -1833,17 +1833,41 @@ function updateToolbarPosition() {
         
         toolbar.style.display = 'block';
         toolbar.style.position = 'fixed';
-        toolbar.style.top = `${rect.top + window.scrollY}px`;
-        toolbar.style.left = `${rect.left - 100}px`;
+        
+        // Calculate position relative to the viewport
+        let topPosition = rect.top; // Use viewport-relative position
+        const toolbarHeight = toolbar.offsetHeight;
+        const viewportHeight = window.innerHeight;
+        
+        // Ensure the toolbar stays within the viewport
+        if (topPosition < 0) {
+            topPosition = 10; // 10px from top if email is above viewport
+        } else if (topPosition + toolbarHeight > viewportHeight) {
+            topPosition = viewportHeight - toolbarHeight - 10; // 10px from bottom
+        }
+        
+        // Set the position
+        toolbar.style.top = `${topPosition}px`;
+        toolbar.style.left = `${rect.left - 140}px`; // Keep the same left position
         toolbar.style.zIndex = '1000';
     } else {
         toolbar.style.display = 'none';
     }
 }
 
-// Add event listeners for scroll and resize
-window.addEventListener('scroll', updateToolbarPosition);
-window.addEventListener('resize', updateToolbarPosition);
+// Make sure to update position on scroll
+window.addEventListener('scroll', () => {
+    if (selectedEmails.size > 0) {
+        requestAnimationFrame(updateToolbarPosition);
+    }
+});
+
+// Update position on window resize
+window.addEventListener('resize', () => {
+    if (selectedEmails.size > 0) {
+        requestAnimationFrame(updateToolbarPosition);
+    }
+});
 
 // Function to handle starring multiple selected emails
 async function starSelected() {
