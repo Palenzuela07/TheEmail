@@ -82,23 +82,61 @@ app.get('/app', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// Enhanced AI endpoint that uses OpenAI
+// Enhance the AI chat endpoint with stronger memory enforcement
 app.post('/api/chat', async (req, res) => {
-  console.log('Chat endpoint hit!', req.body);
   try {
-    const { message } = req.body;
+    const { message, history } = req.body;
     
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
     
-    // Check if we have an OpenAI API key
     if (!process.env.OPENAI_API_KEY) {
       console.error('OpenAI API key not found');
       return res.status(500).json({ error: 'OpenAI API key not configured' });
     }
     
-    // Call OpenAI API
+    // Create an extremely explicit system prompt for memory
+    const systemPrompt = {
+      role: 'system',
+      content: `You are an AI assistant with perfect conversational memory.
+
+==CRITICAL MEMORY RULES==
+1. You MUST extract, store, and recall ANY personal information shared in this conversation.
+2. When a user says "my name is X", immediately store X as their name.
+3. If asked "what's my name?", ALWAYS respond with their name from your memory.
+4. NEVER respond with "I don't have access to personal information" about anything mentioned in this conversation.
+5. Treat all questions about previously discussed topics as memory recall tasks.
+
+EXAMPLE CONVERSATION:
+User: "hello my name is mike"
+You: "Hello Mike! How can I help you today?"
+User: "what's my name?"
+You: "Your name is Mike." (CORRECT)
+NOT: "I don't have access to your personal information." (WRONG)
+
+This conversation is active now. The user has already told you their name if they asked about it.`
+    };
+    
+    console.log(`Processing chat. History items: ${history ? history.length : 0}`);
+    
+    // Create fresh message array with our system prompt first
+    let messages = [systemPrompt];
+    
+    // Add all history items EXCEPT system messages
+    if (history && history.length > 0) {
+      messages = [
+        systemPrompt,
+        ...history.filter(msg => msg.role !== 'system')
+      ];
+    }
+    
+    // Add current message
+    messages.push({ role: 'user', content: message });
+    
+    // Use gpt-4 model for better memory if available, otherwise use gpt-3.5-turbo
+    const model = 'gpt-3.5-turbo';
+    
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -107,11 +145,8 @@ app.post('/api/chat', async (req, res) => {
           'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
         },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: 'You are a helpful email assistant. Provide concise and useful responses.' },
-            { role: 'user', content: message }
-          ],
+          model: model,
+          messages: messages,
           temperature: 0.7
         })
       });

@@ -52,7 +52,10 @@ const SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googlea
 
 // OpenAI API key from environment variables
 let OPENAI_API_KEY;
-let conversationHistory = [];
+let conversationHistory = [{
+    role: "system",
+    content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+}];
 
 let tokenClient;
 let gapiInited = false;
@@ -722,19 +725,81 @@ function deleteEmail(emailId) {
 // Function to reset AI chat
 function resetAIChat() {
     const chatMessages = document.getElementById('chat-messages');
-    chatMessages.innerHTML = `
-        <div class="chat-message ai">
-            How can I help you?
-        </div>
-    `;
-    // Reset conversation history
-    conversationHistory = [{
-        role: "system",
-        content: "You are a helpful AI assistant. Provide clear and concise responses to user questions. Be friendly and professional."
-    }, {
-        role: "assistant",
-        content: "How can I help you?"
-    }];
+    
+    // Try to load previous conversation history
+    const savedHistory = localStorage.getItem('chatHistory');
+    
+    if (savedHistory) {
+        try {
+            // Limit history to last 10 messages for performance
+            conversationHistory = JSON.parse(savedHistory);
+            
+            // If history is too long, keep system prompt and last 10 exchanges
+            if (conversationHistory.length > 21) {
+                const systemPrompt = conversationHistory[0];
+                conversationHistory = [
+                    systemPrompt,
+                    ...conversationHistory.slice(conversationHistory.length - 20)
+                ];
+            }
+            
+            // Rebuild UI from history (last 6 messages for UI clarity)
+            const displayMessages = conversationHistory.slice(Math.max(0, conversationHistory.length - 6));
+            
+            chatMessages.innerHTML = '';
+            displayMessages.forEach(msg => {
+                if (msg.role === 'user') {
+                    chatMessages.innerHTML += `
+                        <div class="chat-message user">${msg.content}</div>
+                    `;
+                } else if (msg.role === 'assistant') {
+                    chatMessages.innerHTML += `
+                        <div class="chat-message ai">${msg.content}</div>
+                    `;
+                }
+            });
+            
+            // If no visible messages (only system prompt), add welcome message
+            if (displayMessages.length <= 1) {
+                chatMessages.innerHTML = `
+                    <div class="chat-message ai">
+                        How can I help you with your emails today?
+                    </div>
+                `;
+            }
+        } catch (e) {
+            console.error('Error loading chat history:', e);
+            // Fallback to default welcome message
+            chatMessages.innerHTML = `
+                <div class="chat-message ai">
+                    How can I help you with your emails today?
+                </div>
+            `;
+            // Reset conversation history to just system prompt
+            conversationHistory = [{
+                role: "system",
+                content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+            }];
+        }
+    } else {
+        // No history found, set default welcome message
+        chatMessages.innerHTML = `
+            <div class="chat-message ai">
+                How can I help you with your emails today?
+            </div>
+        `;
+        // Initialize conversation history with welcome message
+        conversationHistory = [
+            {
+                role: "system",
+                content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+            },
+            {
+                role: "assistant",
+                content: "How can I help you with your emails today?"
+            }
+        ];
+    }
 }
 
 // Add this function to handle the keypress event
@@ -781,6 +846,13 @@ function closeComposeModal() {
     const modal = document.getElementById('compose-modal');
     const chatInput = document.getElementById('chat-input');
     chatInput.removeEventListener('keypress', handleChatKeyPress);
+    
+    // Clear chat history when compose window is closed
+    localStorage.removeItem('chatHistory');
+    conversationHistory = [{
+        role: "system",
+        content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+    }];
     
     modal.classList.remove('show');
     setTimeout(() => modal.style.display = 'none', 300);
@@ -1030,7 +1102,7 @@ function toggleAIChat() {
     }
 }
 
-// Simple chat function
+// Updated chat function that maintains conversation history
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const messages = document.getElementById('chat-messages');
@@ -1055,13 +1127,25 @@ async function sendChatMessage() {
         `;
         messages.scrollTop = messages.scrollHeight;
 
-        // Call our simple API endpoint
+        // Add user message to conversation history
+        conversationHistory.push({
+            role: "user",
+            content: userMessage
+        });
+
+        // Save conversation history to localStorage for persistence
+        localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
+
+        // Call our API endpoint with full conversation history
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ message: userMessage })
+            body: JSON.stringify({ 
+                message: userMessage,
+                history: conversationHistory 
+            })
         });
 
         // Remove loading message
@@ -1075,6 +1159,15 @@ async function sendChatMessage() {
         }
 
         const data = await response.json();
+
+        // Add AI response to conversation history
+        conversationHistory.push({
+            role: "assistant",
+            content: data.response
+        });
+
+        // Update localStorage with new history
+        localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
 
         // Add AI response to UI
         messages.innerHTML += `
