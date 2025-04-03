@@ -1030,7 +1030,7 @@ function toggleAIChat() {
     }
 }
 
-// Update the sendChatMessage function to better handle responses
+// Simple chat function
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const messages = document.getElementById('chat-messages');
@@ -1038,40 +1038,15 @@ async function sendChatMessage() {
     
     if (!userMessage) return;
     
-    // Add user message to UI
-    messages.innerHTML += `
-        <div class="chat-message user">
-            ${userMessage}
-        </div>
-    `;
-    input.value = ''; // Clear input field
-    
-    // More sophisticated intent detection
-    const intent = detectUserIntent(userMessage.toLowerCase());
-    
-    if (intent.type === 'confirm') {
-        handleConfirmedAction(intent.action, messages);
-        return;
-    }
-    
-    if (intent.type === 'move_to_compose') {
-        if (intent.confidence === 'high') {
-            // Find and move the last AI message
-            moveLastAIMessageToCompose(messages);
-        } else {
-            // Ask for confirmation
-            messages.innerHTML += `
-                <div class="chat-message ai">
-                    Would you like me to move this response to the compose area? Please reply with "yes" to confirm or "no" to keep discussing.
-                </div>
-            `;
-        }
-        messages.scrollTop = messages.scrollHeight;
-        return;
-    }
-    
-    // Continue with regular chat functionality
     try {
+        // Add user message to UI
+        messages.innerHTML += `
+            <div class="chat-message user">
+                ${userMessage}
+            </div>
+        `;
+        input.value = ''; // Clear input field
+        
         // Show loading state
         messages.innerHTML += `
             <div class="chat-message ai" id="loading-message">
@@ -1080,66 +1055,38 @@ async function sendChatMessage() {
         `;
         messages.scrollTop = messages.scrollHeight;
 
-        // Add user message to conversation history
-        conversationHistory.push({
-            role: "user",
-            content: userMessage
-        });
-
-        // Call OpenAI API with full conversation history
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        // Call our simple API endpoint
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
+                'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: conversationHistory,
-                temperature: 0.7
-            })
+            body: JSON.stringify({ message: userMessage })
         });
 
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error?.message || 'API request failed');
-        }
-
-        const aiResponse = data.choices[0].message.content;
-        
-        // Add AI response to conversation history
-        conversationHistory.push({
-            role: "assistant",
-            content: aiResponse
-        });
-        
         // Remove loading message
         const loadingMessage = document.getElementById('loading-message');
         if (loadingMessage) {
             loadingMessage.remove();
         }
 
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
         // Add AI response to UI
         messages.innerHTML += `
             <div class="chat-message ai">
-                ${aiResponse}
+                ${data.response}
             </div>
         `;
 
-        // If the response looks like an email, ask for confirmation
-        if (isEmailContent(aiResponse)) {
-            messages.innerHTML += `
-                <div class="chat-message ai">
-                    Is this email good to move to compose, or would you like me to make changes?
-                </div>
-            `;
-        }
-
     } catch (error) {
-        console.error('Error getting AI response:', error);
+        console.error('Error in chat:', error);
         
-        // Remove loading message
+        // Remove loading message if it exists
         const loadingMessage = document.getElementById('loading-message');
         if (loadingMessage) {
             loadingMessage.remove();
@@ -1148,7 +1095,7 @@ async function sendChatMessage() {
         // Show error message
         messages.innerHTML += `
             <div class="chat-message ai">
-                Sorry, I encountered an error. Please try again.
+                Sorry, I'm having trouble responding right now. Please try again in a moment.
             </div>
         `;
     }
