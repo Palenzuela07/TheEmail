@@ -853,69 +853,57 @@ function withTimeout(promise, timeout) {
     ]);
 }
 
-// Function to refresh emails with retry logic
-async function refreshEmails(retryCount = 0, forceRefresh = false) {
-    if (!isOnline()) {
-        if (retryCount < 3) {
-            console.log(`Retrying refresh in 2 seconds... (Attempt ${retryCount + 1})`);
-            setTimeout(() => refreshEmails(retryCount + 1, forceRefresh), 2000);
-        }
-        return;
-    }
-
+// Update the refreshEmails function to handle manual refresh
+async function refreshEmails(retryCount = 0, forceRefresh = true) {
     try {
-        // Save the current active tab/category before refreshing
-        const activeTabs = document.querySelectorAll('.email-tab.active');
-        let activeTab = 'primary'; // Default
-        if (activeTabs.length > 0) {
-            const tabElement = activeTabs[0];
-            // Extract the filter from the onclick attribute or use another method to identify the tab
-            const onclickAttr = tabElement.getAttribute('onclick');
-            if (onclickAttr && onclickAttr.includes('switchTab')) {
-                const match = onclickAttr.match(/switchTab\('([^']+)'\)/);
-                if (match && match[1]) {
-                    activeTab = match[1];
-                }
-            }
-        }
+        // Show loading state in the email list
+        document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Loading...</div>';
         
-        // Also check for active sub-nav-items (like starred, important, sent)
-        const activeSubNavs = document.querySelectorAll('.sub-nav-item.active');
-        if (activeSubNavs.length > 0) {
-            const subNavElement = activeSubNavs[0];
-            const onclickAttr = subNavElement.getAttribute('onclick');
-            if (onclickAttr && onclickAttr.includes('switchTab')) {
-                const match = onclickAttr.match(/switchTab\('([^']+)'\)/);
-                if (match && match[1]) {
-                    activeTab = match[1];
-                }
-            }
-        }
+        // Get the current active category/filter
+        const activeTab = currentFilter || 'primary';
         
-        // Now refresh emails with the saved category
+        // Fetch new emails for the current category
         const newEmails = await listEmails(currentPage, activeTab);
         
-        // Only update display if we have new emails and either:
-        // 1. We had no emails before
-        // 2. Force refresh was requested
-        // 3. The new emails are different from current ones
-        if (newEmails && (currentEmails.length === 0 || forceRefresh || emailsHaveChanged(newEmails))) {
+        // Display the new emails
+        if (newEmails) {
             displayEmails(newEmails);
+            console.log('Emails refreshed successfully');
         }
-
-        // Set up next background refresh
-        setTimeout(() => {
-            refreshEmails(0, false);
-        }, 30000); // Refresh every 30 seconds
 
     } catch (error) {
         console.error("Failed to refresh emails:", error);
         if (retryCount < 3) {
             console.log(`Retrying refresh in 2 seconds... (Attempt ${retryCount + 1})`);
             setTimeout(() => refreshEmails(retryCount + 1, forceRefresh), 2000);
+        } else {
+            document.getElementById('emailList').innerHTML = 
+                '<div style="text-align: center; padding: 20px;">Error refreshing emails. Please try again.</div>';
         }
     }
 }
+
+// Add animation to the refresh button when clicked
+function handleRefreshClick() {
+    const refreshIcon = document.querySelector('.refresh-icon');
+    refreshIcon.style.transform = 'rotate(360deg)';
+    
+    // Reset the rotation after animation
+    setTimeout(() => {
+        refreshIcon.style.transform = 'rotate(0deg)';
+    }, 1000);
+    
+    // Perform the refresh
+    refreshEmails();
+}
+
+// Update the refresh button onclick handler in the HTML
+document.addEventListener('DOMContentLoaded', () => {
+    const refreshBtn = document.querySelector('.refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.onclick = handleRefreshClick;
+    }
+});
 
 // Helper function to check if emails have changed
 function emailsHaveChanged(newEmails) {
