@@ -85,7 +85,7 @@ app.get('/app', (req, res) => {
 // Enhance the AI chat endpoint with stronger memory enforcement
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, timestamp } = req.body;
     
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -96,22 +96,28 @@ app.post('/api/chat', async (req, res) => {
       return res.status(500).json({ error: 'OpenAI API key not configured' });
     }
     
-    // Update the system prompt to avoid duplicate confirmation prompts
+    // Format the timestamp for more user-friendly display
+    const currentTime = timestamp 
+      ? new Date(timestamp).toLocaleString() 
+      : new Date().toLocaleString();
+    
+    // Update system prompt to generate emails immediately without questions
     const systemPrompt = {
       role: 'system',
-      content: `You are an email writing assistant that provides helpful drafts.
+      content: `You are a helpful assistant that answers questions and generates emails instantly.
 
-BEHAVIOR REQUIREMENTS:
-1. When asked to write an email, generate a complete email immediately with available information
-2. Do NOT ask questions before generating the email - use what's provided
-3. Format emails with Subject line, greeting, concise body and professional closing
-4. Use [Your Name] and [Boss's Name] as placeholders
-5. DO NOT include phrases like "Does this email look good" or "Would you like me to make changes" at the end
-6. When asked to modify an email, make the requested changes and provide the complete updated email
-7. Never tell the user you've moved the email to compose - the client handles that`
+KEY INSTRUCTIONS:
+1. For general questions - provide friendly, conversational responses
+2. For email requests - NEVER ask for more details, just create the email IMMEDIATELY
+3. When user says "write email to [person] about [topic]" - generate complete email right away
+4. For "write me an email to my mother, im not making it to dinner" - create a full email explaining can't make it to dinner
+5. NEVER respond with "What would you like to say" or "What details should I include"
+6. Always assume you have enough information to write the email
+
+Remember: The moment someone mentions writing an email, create it without asking questions.`
     };
     
-    console.log(`Processing chat. History items: ${history ? history.length : 0}`);
+    console.log(`Processing chat. History items: ${history ? history.length : 0}, Time: ${currentTime}`);
     
     // Create fresh message array with our system prompt first
     let messages = [systemPrompt];

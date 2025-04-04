@@ -894,7 +894,7 @@ async function sendChatMessage() {
             content: userMessage
         });
 
-        // Call the API with the full history
+        // Include current time in the API request
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -902,7 +902,8 @@ async function sendChatMessage() {
             },
             body: JSON.stringify({ 
                 message: userMessage,
-                history: conversationHistory 
+                history: conversationHistory,
+                timestamp: new Date().toISOString() // Add current timestamp
             })
         });
 
@@ -931,19 +932,20 @@ async function sendChatMessage() {
         // Add AI response to UI
         messages.innerHTML += `
             <div class="chat-message ai">
-                ${formatEmailContent(aiResponse)}
+                ${aiResponse}
             </div>
         `;
 
-        // If this contains an email format, show the confirmation message
+        // Check if response contains an email
         if (containsEmailFormat(aiResponse)) {
+            console.log("Email detected in response");
+            // Store email content globally
             window.lastGeneratedEmail = aiResponse;
             window.awaitingEmailConfirmation = true;
-            console.log("Email detected, awaiting confirmation");
             
-            // Add confirmation prompt to UI
+            // Add a visible confirmation question
             messages.innerHTML += `
-                <div class="chat-message ai">
+                <div class="chat-message ai confirmation-prompt" style="margin-top: 10px; color: #1a73e8; font-weight: bold;">
                     Would you like me to move this email to the compose area? (Yes/No)
                 </div>
             `;
@@ -963,7 +965,25 @@ async function sendChatMessage() {
     messages.scrollTop = messages.scrollHeight;
 }
 
-// Update the handleChatKeyPress function to better recognize various responses
+// Improve email detection function
+function containsEmailFormat(text) {
+    // Check for common email components - make more lenient
+    return (
+        // Check for subject line
+        (text.includes("Subject:") || text.includes("SUBJECT:")) &&
+        
+        // Check for greeting - more options
+        (text.includes("Dear") || text.includes("Hello") || text.includes("Hi") || 
+         text.includes("Hey") || text.includes("Greetings")) &&
+        
+        // Check for closing - more options
+        (text.includes("Sincerely") || text.includes("Best") || text.includes("Regards") || 
+         text.includes("Thank you") || text.includes("Thanks") || text.includes("Cheers") ||
+         text.includes("Yours") || text.includes("Warm") || text.includes("See you"))
+    );
+}
+
+// Simplify handleChatKeyPress to focus on confirmation
 function handleChatKeyPress(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
@@ -973,8 +993,10 @@ function handleChatKeyPress(event) {
         
         if (!userMessage) return;
         
-        // If awaiting confirmation and user responds
-        if (window.awaitingEmailConfirmation && userMessage) {
+        // If awaiting confirmation for email
+        if (window.awaitingEmailConfirmation === true) {
+            console.log("Processing confirmation response:", userMessage);
+            
             const messages = document.getElementById('chat-messages');
             
             // Add user message to UI
@@ -985,110 +1007,34 @@ function handleChatKeyPress(event) {
             `;
             input.value = ''; // Clear input
             
-            // More flexible pattern matching for various types of responses
-            const positiveResponse = /^(yes|yeah|yea|yep|sure|ok|okay|good|looks good|sounds good|fine|perfect|great)/i.test(userMessage);
-            const timeSpecification = /(\d+)\s*(min|minute|minutes|hour|hours)/i.test(userMessage);
-            const editRequest = userMessage.length < 50; // Short responses are likely edits
+            // Check if it's a confirmation
+            const isConfirmation = /^(yes|yeah|yea|yep|sure|ok|okay|y|good|fine|great)/i.test(userMessage);
             
-            if (positiveResponse) {
-                // User wants to move to compose
-                if (window.lastGeneratedEmail) {
-                    moveEmailToCompose(window.lastGeneratedEmail);
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            I've moved the email to the compose area for you.
-                        </div>
-                    `;
-                }
-                window.awaitingEmailConfirmation = false;
-            } 
-            else {
-                // Handle as edit request - send to API for modification
-                window.awaitingEmailConfirmation = false;
+            if (isConfirmation) {
+                console.log("Confirmation received, moving to compose");
+                // Move content to compose area
+                moveEmailToCompose(window.lastGeneratedEmail);
                 
-                // Add to conversation history
-                conversationHistory.push({
-                    role: "user", 
-                    content: userMessage
-                });
-                
-                // Show loading state
+                // Show confirmation message
                 messages.innerHTML += `
-                    <div class="chat-message ai" id="loading-message">
-                        <em>Updating email...</em>
+                    <div class="chat-message ai">
+                        I've moved the email to the compose area for you.
                     </div>
                 `;
-                messages.scrollTop = messages.scrollHeight;
-                
-                // Make API call for modified email
-                fetch('/api/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ 
-                        message: userMessage, // Pass the raw message - more natural
-                        history: conversationHistory 
-                    })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // Remove loading message
-                    document.getElementById('loading-message').remove();
-                    
-                    // Add updated email
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            ${data.response}
-                        </div>
-                    `;
-                    
-                    // Add confirmation prompt again
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            Would you like me to move this email to the compose area? (Yes/No)
-                        </div>
-                    `;
-                    
-                    // Update conversation history
-                    conversationHistory.push({
-                        role: "assistant",
-                        content: data.response
-                    });
-                    
-                    // Set flag for next confirmation
-                    window.lastGeneratedEmail = data.response;
-                    window.awaitingEmailConfirmation = true;
-                    
-                    messages.scrollTop = messages.scrollHeight;
-                    localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
-                })
-                .catch(error => {
-                    console.error('Error updating email:', error);
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            Sorry, I couldn't update the email. Please try again.
-                        </div>
-                    `;
-                });
-                
-                return;
+            } else {
+                console.log("Non-confirmation received, continuing chat");
+                // Handle as regular message
+                sendChatMessage();
             }
             
-            // Add to conversation history
-            conversationHistory.push({
-                role: "user",
-                content: userMessage
-            });
+            // Clear confirmation state regardless of response
+            window.awaitingEmailConfirmation = false;
+            window.lastGeneratedEmail = null;
             
-            // Update localStorage
-            localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
-            
-            return;
+        } else {
+            // Regular chat message
+            sendChatMessage();
         }
-        
-        // Regular message handling
-        sendChatMessage();
     }
 }
 
@@ -1104,17 +1050,6 @@ function checkIfEmailRequest(message) {
     ];
     
     return emailRequestPatterns.some(pattern => pattern.test(message));
-}
-
-// Add function to check if the response contains an email format
-function containsEmailFormat(text) {
-    // Check for common email components
-    return (
-        (text.includes("Subject:") || text.includes("SUBJECT:")) &&
-        (text.includes("Dear") || text.includes("Hello") || text.includes("Hi")) &&
-        (text.includes("Sincerely") || text.includes("Best") || text.includes("Regards") || 
-         text.includes("Thank you") || text.includes("Thanks"))
-    );
 }
 
 // Function to find the most recent email in the conversation history
@@ -1138,9 +1073,15 @@ function moveEmailToCompose(emailContent) {
         subject = subjectMatch[1].trim();
     }
     
+    // Remove the Subject line from the email body
+    let bodyContent = emailContent;
+    if (subjectMatch) {
+        bodyContent = bodyContent.replace(/Subject:.*?\n/, '');
+    }
+    
     // Set the values
     document.getElementById('compose-subject').value = subject;
-    document.getElementById('compose-body').value = emailContent;
+    document.getElementById('compose-body').value = bodyContent;
 }
 
 // Update the openComposeModal function to add the event listener
