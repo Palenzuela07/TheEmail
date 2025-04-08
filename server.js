@@ -28,8 +28,8 @@ app.use((req, res, next) => {
         'Content-Security-Policy': "default-src 'self' https://apis.google.com https://accounts.google.com https://www.googleapis.com https://www.gstatic.com https://api.openai.com; " +
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com; " +
             "style-src 'self' 'unsafe-inline' https://www.gstatic.com; " +
-            "img-src 'self' data: https: blob:; " +
-            "connect-src 'self' https://apis.google.com https://accounts.google.com https://www.googleapis.com https://www.gstatic.com https://api.openai.com; " +
+            "img-src 'self' data: https: blob: https://www.google.com; " +
+            "connect-src 'self' https://apis.google.com https://accounts.google.com https://www.googleapis.com https://www.gstatic.com https://api.openai.com https://www.google.com; " +
             "frame-src https://accounts.google.com https://content.googleapis.com https://content-gmail.googleapis.com https://*.google.com;",
         // Cache control headers
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
