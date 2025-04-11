@@ -1149,36 +1149,53 @@ function moveEmailToCompose(emailContent) {
     document.getElementById('compose-body').value = bodyContent;
 }
 
-// Update the openComposeModal function to add the event listener
+// Update the openComposeModal function to properly set the title
 function openComposeModal(replyTo = null) {
+    console.log('Opening compose modal', replyTo ? 'as reply' : 'as new message');
+    
     const modal = document.getElementById('compose-modal');
+    if (!modal) {
+        console.error('Compose modal not found');
+        return;
+    }
+
+    // Find and update the modal title
+    const modalTitle = modal.querySelector('.modal-header h2');
+    if (modalTitle) {
+        modalTitle.textContent = replyTo ? 'Reply' : 'New Message';
+    }
+
+    // Reset form fields
     const toField = document.getElementById('compose-to');
     const subjectField = document.getElementById('compose-subject');
     const bodyField = document.getElementById('compose-body');
-    const modalTitle = modal.querySelector('.modal-header h2');
     
-    // Reset AI chat
-    resetAIChat();
-    
-    // Add event listener for Enter key in chat input
-    const chatInput = document.getElementById('chat-input');
-    chatInput.addEventListener('keypress', handleChatKeyPress);
-    
-    if (replyTo) {
-        modalTitle.textContent = 'Reply';
-        toField.value = replyTo.from || ''; // Ensure it's an empty string if undefined
-        subjectField.value = replyTo.subject || ''; // Ensure it's an empty string if undefined
-        bodyField.value = '';
-    } else {
-        modalTitle.textContent = 'New Message';
-        toField.value = ''; // Set to empty string
-        subjectField.value = ''; // Set to empty string
-        bodyField.value = '';
-    }
-    
+    if (toField) toField.value = replyTo?.from || '';
+    if (subjectField) subjectField.value = replyTo?.subject ? `Re: ${replyTo.subject}` : '';
+    if (bodyField) bodyField.value = replyTo ? `
+
+On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
+${replyTo.body ? replyTo.body.split('\n').map(line => '> ' + line).join('\n') : ''}` : '';
+
+    // Show the modal
     modal.style.display = 'block';
     setTimeout(() => modal.classList.add('show'), 10);
+    
+    // Reset AI chat if needed
+    resetAIChat();
 }
+
+// Make sure the compose button explicitly calls with null parameter
+document.addEventListener('DOMContentLoaded', function() {
+    const composeBtn = document.querySelector('.compose-btn');
+    if (composeBtn) {
+        composeBtn.onclick = function(e) {
+            e.preventDefault();
+            openComposeModal(null); // Explicitly pass null to ensure it's a new message
+            console.log('Compose button clicked - opening new message');
+        };
+    }
+});
 
 // Update closeComposeModal to remove the event listener
 function closeComposeModal() {
@@ -2285,3 +2302,21 @@ async function toggleImportant(emailId, isCurrentlyImportant) {
         alert('Error updating important status. Please try again.');
     }
 }
+
+// Add a debug function to test both compose and reply
+window.testComposeWindows = function() {
+    // Test compose (new message)
+    console.log('Testing new message compose window:');
+    openComposeModal(null);
+    
+    // Wait 3 seconds and then test reply
+    setTimeout(() => {
+        console.log('Testing reply window:');
+        openComposeModal({
+            from: 'test@example.com',
+            subject: 'Test Subject',
+            date: new Date().toLocaleString(),
+            body: 'This is a test email body.\nWith multiple lines.'
+        });
+    }, 3000);
+};
