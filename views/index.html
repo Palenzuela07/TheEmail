@@ -1932,7 +1932,13 @@
                         </div>
                     </div>
                     <div class="compose-area">
-                        <textarea id="compose-body" placeholder="Write your message here..."></textarea>
+                        <textarea id="compose-body" placeholder="Write your message here..." style="height: 250px;"></textarea>
+                        <div class="editor-toolbar">
+                            <button class="editor-btn" onclick="formatText('bold')"><b>B</b></button>
+                            <button class="editor-btn" onclick="formatText('italic')"><i>I</i></button>
+                            <button class="editor-btn" onclick="formatText('underline')"><u>U</u></button>
+                            <button class="editor-btn" onclick="formatText('link')">Link</button>
+                        </div>
                     </div>
                 </div>
             </div>
