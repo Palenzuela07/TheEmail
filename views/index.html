@@ -1948,5 +1948,71 @@
             </div>
         </div>
     </div>
+    <script>
+        function formatText(format) {
+            const textarea = document.getElementById('compose-body');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end);
+            
+            if (selectedText.length === 0) return;
+            
+            // Apply visual formatting directly to the textarea by wrapping with markers
+            // We'll use common markdown-style markers that indicate the formatting visually
+            let prefix = '';
+            let suffix = '';
+            
+            switch(format) {
+                case 'bold':
+                    prefix = '**';
+                    suffix = '**';
+                    break;
+                case 'italic':
+                    prefix = '*';
+                    suffix = '*';
+                    break;
+                case 'underline':
+                    prefix = '_';
+                    suffix = '_';
+                    break;
+                case 'link':
+                    const url = prompt('Enter URL:', 'http://');
+                    if (url) {
+                        prefix = '[';
+                        suffix = `](${url})`;
+                    } else {
+                        return;
+                    }
+                    break;
+            }
+            
+            // Insert formatting markers
+            textarea.value = 
+                textarea.value.substring(0, start) + 
+                prefix + selectedText + suffix + 
+                textarea.value.substring(end);
+            
+            // Update cursor position to be after the formatted text
+            const newCursorPos = end + prefix.length + suffix.length;
+            textarea.setSelectionRange(newCursorPos, newCursorPos);
+            
+            // Restore focus to the textarea
+            textarea.focus();
+        }
+        
+        // Modify the sendEmail function to prepare proper HTML content
+        const originalSendEmail = window.sendEmail;
+        window.sendEmail = function() {
+            const textarea = document.getElementById('compose-body');
+            const content = textarea.value;
+            
+            // Convert markdown-style formatting to HTML before sending
+            // This is what we could add to the sendEmail function to convert the formatting
+            // This doesn't affect the moveToCompose feature since we're just modifying at send time
+            
+            // For now, just call the original function
+            originalSendEmail();
+        };
+    </script>
 </body>
 </html> 
