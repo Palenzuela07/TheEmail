@@ -92,107 +92,6 @@ document.addEventListener('DOMContentLoaded', () => {
             clearAllSelections();
         }
     });
-
-    // Add this to your DOMContentLoaded event where you set up styles
-    const editorStyles = document.createElement('style');
-    editorStyles.textContent = `
-        .editor-container {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-        }
-        
-        .compose-toolbar {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            padding: 8px;
-            background: #f5f5f5;
-            border-bottom: 1px solid #e0e0e0;
-        }
-        
-        .compose-toolbar button {
-            padding: 6px 10px;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .compose-toolbar button:hover {
-            background: #f0f0f0;
-        }
-        
-        .compose-toolbar .separator {
-            width: 1px;
-            height: 24px;
-            background: #ddd;
-            margin: 0 4px;
-        }
-        
-        .compose-editor {
-            min-height: 300px;  /* Increased height */
-            height: 100%;       /* Fill available space */
-            padding: 10px;
-            outline: none;
-            overflow-y: auto;
-            background: white;
-            width: 100%;
-            flex-grow: 1;       /* Fill remaining space */
-        }
-        
-        #font-size {
-            height: 30px;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-        }
-        
-        /* Make the compose modal maintain its original size */
-        .compose-modal .modal-content {
-            height: auto !important;
-            width: auto !important;
-        }
-        
-        /* Ensure the compose form maintains its original size */
-        .compose-form {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-        }
-    `;
-    document.head.appendChild(editorStyles);
-
-    // Replace with this safer version:
-    document.addEventListener('DOMContentLoaded', () => {
-        const composeBtn = document.querySelector('.compose-btn');
-        if (composeBtn) {
-            composeBtn.addEventListener('click', () => {
-                console.log('Compose button clicked');
-                openComposeModal();
-            });
-        } else {
-            console.error('Compose button not found');
-        }
-    });
-
-    // Add this call to the existing DOMContentLoaded handler
-    setTimeout(debugDOMStructure, 1000);
-    
-    // Add a direct click handler to the compose button for testing
-    const composeBtn = document.querySelector('.compose-btn');
-    if (composeBtn) {
-        composeBtn.addEventListener('click', (e) => {
-            console.log('Compose button clicked directly');
-            e.preventDefault();
-            checkComposeModal();
-            openComposeModal();
-        });
-    }
 });
 
 function createSelectionToolbar() {
@@ -1154,71 +1053,53 @@ function handleChatKeyPress(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
         
-        const chatInput = document.getElementById('chat-input');
-        const userMessage = chatInput.value.trim();
+        const input = document.getElementById('chat-input');
+        const userMessage = input.value.trim();
         
         if (!userMessage) return;
         
-        const chatMessages = document.getElementById('chat-messages');
-        
-        // Add user message to the UI
-        chatMessages.innerHTML += `
-            <div class="chat-message user">
-                ${userMessage}
-            </div>
-        `;
-        
-        // Clear input
-        chatInput.value = '';
-        
-        // Handle email confirmation
-        if (window.awaitingEmailConfirmation && window.lastGeneratedEmail) {
-            console.log('Processing email confirmation response:', userMessage);
+        // If awaiting confirmation for email
+        if (window.awaitingEmailConfirmation === true) {
+            console.log("Processing confirmation response:", userMessage);
             
-            // Broad pattern matching for affirmative responses
-            if (/^(y|ye|yes|yeah|yep|yup|sure|ok|okay|move|send|fine|go|good)/i.test(userMessage)) {
-                // Show loading message
-                chatMessages.innerHTML += `
+            const messages = document.getElementById('chat-messages');
+            
+            // Add user message to UI
+            messages.innerHTML += `
+                <div class="chat-message user">
+                    ${userMessage}
+                </div>
+            `;
+            input.value = ''; // Clear input
+            
+            // Check if it's a confirmation
+            const isConfirmation = /^(yes|yeah|yea|yep|sure|ok|okay|y|good|fine|great)/i.test(userMessage);
+            
+            if (isConfirmation) {
+                console.log("Confirmation received, moving to compose");
+                // Move content to compose area
+                moveEmailToCompose(window.lastGeneratedEmail);
+                
+                // Show confirmation message
+                messages.innerHTML += `
                     <div class="chat-message ai">
-                        Moving email to compose area...
+                        I've moved the email to the compose area for you.
                     </div>
                 `;
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                
-                // Try to move the email
-                const success = window.moveEmailToComposeWindow(window.lastGeneratedEmail);
-                
-                // Add feedback
-                setTimeout(() => {
-                    if (success) {
-                        chatMessages.innerHTML += `
-                            <div class="chat-message ai">
-                                The email has been moved to the compose area. You can edit it there.
-                            </div>
-                        `;
-                    } else {
-                        chatMessages.innerHTML += `
-                            <div class="chat-message ai">
-                                Sorry, I couldn't move the email to the compose area. Please try again.
-                            </div>
-                        `;
-                    }
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                }, 300);
             } else {
-                // Not a confirmation - treat as regular message
+                console.log("Non-confirmation received, continuing chat");
+                // Handle as regular message
                 sendChatMessage();
             }
             
-            // Reset confirmation state
+            // Clear confirmation state regardless of response
             window.awaitingEmailConfirmation = false;
+            window.lastGeneratedEmail = null;
+            
         } else {
             // Regular chat message
             sendChatMessage();
         }
-        
-        // Ensure messages are scrolled to bottom
-        chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 }
 
@@ -1248,212 +1129,125 @@ function findEmailInHistory(history) {
     return null;
 }
 
-// Replace the entire moveEmailToCompose function with this super simple version
+// Function to move the email to the compose area
 function moveEmailToCompose(emailContent) {
-    console.log('BASIC TRANSFER: Starting direct email transfer');
-    
-    try {
-        // First make sure compose modal exists and is properly set up
-        const modal = document.getElementById('compose-modal');
-        const composeBody = document.getElementById('compose-body');
-        const composeSubject = document.getElementById('compose-subject');
-        
-        // If modal doesn't exist, alert the user
-        if (!modal) {
-            console.error('Compose modal not found!');
-            alert('Cannot find the compose modal. Please try clicking the compose button first.');
-            return false;
-        }
-        
-        // Display the modal
-        modal.style.display = 'block';
-        
-        // Process the email content
-        let subject = '';
-        let body = emailContent;
-        
-        // Look for subject line
-        const subjectMatch = emailContent.match(/Subject: (.*?)(?:\n|$)/);
-        if (subjectMatch) {
-            subject = subjectMatch[1].trim();
-            body = body.replace(/Subject: .*?\n/, ''); // Remove subject from body
-        }
-        
-        // Set the subject if the field exists
-        if (composeSubject) {
-            composeSubject.value = subject;
-            console.log('Subject set to:', subject);
-        } else {
-            console.error('Subject field not found');
-        }
-        
-        // Set the body if the textarea exists
-        if (composeBody) {
-            composeBody.value = body;
-            console.log('Body content set');
-        } else {
-            console.error('Body field not found');
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Critical error in moveEmailToCompose:', error);
-        alert('Error moving email to compose area. Please try again.');
-        return false;
+    // Extract subject if present
+    let subject = '';
+    const subjectMatch = emailContent.match(/Subject: (.*?)(?:\n|$)/);
+    if (subjectMatch) {
+        subject = subjectMatch[1].trim();
     }
+    
+    // Remove the Subject line from the email body
+    let bodyContent = emailContent;
+    if (subjectMatch) {
+        bodyContent = bodyContent.replace(/Subject:.*?\n/, '');
+    }
+    
+    // Set the values
+    document.getElementById('compose-subject').value = subject;
+    document.getElementById('compose-body').value = bodyContent;
 }
 
-// Add this code to handle the cancel/close button
-document.addEventListener('DOMContentLoaded', function() {
-    // Close button handler for the compose modal
-    const closeButtons = document.querySelectorAll('.compose-close, .compose-modal .close, .compose-modal .cancel-btn');
-    
-    closeButtons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('Close button clicked');
-            
-            // Get the modal
-            const modal = document.getElementById('compose-modal');
-            if (modal) {
-                // Hide the modal
-                modal.style.display = 'none';
-                modal.classList.remove('show');
-                
-                // Reset the form fields
-                const form = document.querySelector('.compose-form');
-                if (form) form.reset();
-                
-                console.log('Compose modal closed');
-            }
-        });
-    });
-    
-    // Also handle clicking outside the modal to close it
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('compose-modal');
-        if (modal && event.target === modal) {
-            modal.style.display = 'none';
-            modal.classList.remove('show');
-            console.log('Modal closed by clicking outside');
-        }
-    });
-});
-
-// Totally new implementation of openComposeModal to ensure we start with the textarea
+// Update the openComposeModal function to add the event listener
 function openComposeModal(replyTo = null) {
-    console.log('OPEN MODAL: Starting');
-    
-    // Get or verify modal exists
     const modal = document.getElementById('compose-modal');
-    if (!modal) {
-        console.error('OPEN MODAL: Compose modal not found in DOM');
-        alert('Error: Compose modal not found');
-        return;
+    const toField = document.getElementById('compose-to');
+    const subjectField = document.getElementById('compose-subject');
+    const bodyField = document.getElementById('compose-body');
+    const modalTitle = modal.querySelector('.modal-header h2');
+    
+    // Reset AI chat
+    resetAIChat();
+    
+    // Add event listener for Enter key in chat input
+    const chatInput = document.getElementById('chat-input');
+    chatInput.addEventListener('keypress', handleChatKeyPress);
+    
+    if (replyTo) {
+        modalTitle.textContent = 'Reply';
+        toField.value = replyTo.from || ''; // Ensure it's an empty string if undefined
+        subjectField.value = replyTo.subject || ''; // Ensure it's an empty string if undefined
+        bodyField.value = '';
+    } else {
+        modalTitle.textContent = 'New Message';
+        toField.value = ''; // Set to empty string
+        subjectField.value = ''; // Set to empty string
+        bodyField.value = '';
     }
     
-    console.log('OPEN MODAL: Modal found');
-    
-    // Show the modal first
     modal.style.display = 'block';
-    setTimeout(() => {
-        modal.classList.add('show');
-        console.log('OPEN MODAL: Modal should be visible now');
-        
-        // Now get the form fields
-        const toField = document.getElementById('compose-to');
-        const subjectField = document.getElementById('compose-subject');
-        const bodyField = document.getElementById('compose-body');
-        
-        // If we already have an enhanced editor, remove it
-        const existingEditor = document.querySelector('.editor-container');
-        if (existingEditor) {
-            console.log('OPEN MODAL: Removing existing rich editor');
-            // Find parent
-            const parent = existingEditor.parentNode;
-            
-            // Create a new textarea
-            const newTextarea = document.createElement('textarea');
-            newTextarea.id = 'compose-body';
-            newTextarea.name = 'compose-body';
-            newTextarea.className = 'compose-body';
-            newTextarea.placeholder = 'Write your email here...';
-            
-            // Get content from existing editor if possible
-            const editorContent = document.querySelector('.compose-editor')?.innerHTML || '';
-            newTextarea.value = editorContent;
-            
-            // Replace editor with textarea
-            parent.replaceChild(newTextarea, existingEditor);
-        }
-        
-        // Clear fields if they exist
-        if (toField) toField.value = replyTo?.from || '';
-        if (subjectField) subjectField.value = replyTo?.subject || '';
-        if (document.getElementById('compose-body')) {
-            document.getElementById('compose-body').value = '';
-        }
-        
-        console.log('OPEN MODAL: Form fields reset');
-        
-        // Wait a bit then enhance editor
-        setTimeout(enhanceComposeEditor, 500);
-        
-    }, 100);
+    setTimeout(() => modal.classList.add('show'), 10);
 }
 
-// Add this function to check if the compose modal exists
-function checkComposeModal() {
+// Update closeComposeModal to remove the event listener
+function closeComposeModal() {
     const modal = document.getElementById('compose-modal');
-    console.log('Compose modal exists:', !!modal);
-    if (modal) {
-        console.log('Modal display style:', modal.style.display);
-        console.log('Modal classes:', modal.className);
-    }
+    const chatInput = document.getElementById('chat-input');
+    chatInput.removeEventListener('keypress', handleChatKeyPress);
     
-    const composeBtn = document.querySelector('.compose-btn');
-    console.log('Compose button exists:', !!composeBtn);
+    // Clear chat history when compose window is closed
+    localStorage.removeItem('chatHistory');
+    conversationHistory = [{
+        role: "system",
+        content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+    }];
     
-    return modal;
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
 }
 
 // Function to send an email
 async function sendEmail() {
     try {
-        // Get form values - fix selectors to match your actual HTML elements
-        const to = document.querySelector('.compose-to')?.value || document.getElementById('compose-to')?.value || '';
-        const subject = document.querySelector('.compose-subject')?.value || document.getElementById('compose-subject')?.value || '';
-        
-        // Get content from rich editor
-        const body = window.emailEditor?.innerHTML || document.querySelector('.compose-body')?.value || '';
-        
+        const to = document.getElementById('compose-to').value;
+        const subject = document.getElementById('compose-subject').value;
+        const body = document.getElementById('compose-body').value;
+
+        if (!to || !subject || !body) {
+            alert('Please fill in all fields');
+            return;
+        }
+
         console.log('Sending email to:', to);
         console.log('Subject:', subject);
-        
-        // Encode for Gmail API - set content type to HTML
-        const encodedMessage = btoa(
-            `To: ${to}\r\n` +
-            `Subject: ${subject}\r\n` +
-            `Content-Type: text/html; charset=UTF-8\r\n\r\n` +
-            `${body}`
-        ).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-        
-        // Send the email
-        await gapi.client.gmail.users.messages.send({
+
+        // Create email content
+        const emailContent = [
+            `From: ${userEmail}`,
+            `To: ${to}`,
+            'Content-Type: text/plain; charset=utf-8',
+            'MIME-Version: 1.0',
+            `Subject: ${subject}`,
+            '',
+            body
+        ].join('\r\n');
+
+        console.log('Email content:', emailContent);
+
+        // Base64 encode the email
+        const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_')
+            .replace(/=+$/, '');
+
+        console.log('Making API call...');
+
+        const response = await gapi.client.gmail.users.messages.send({
             'userId': 'me',
             'resource': {
-                'raw': encodedMessage
+                'raw': encodedEmail
             }
         });
-        
-        // Close compose and show success
+
+        console.log('API Response:', response);
+
         closeComposeModal();
         alert('Email sent successfully!');
-        
+
     } catch (error) {
-        console.error('Error sending email:', error);
-        alert('Error sending email. Please try again.');
+        console.error('Detailed error:', error);
+        alert(`Error sending email: ${error.message || 'Unknown error'}`);
     }
 }
 
@@ -2491,307 +2285,3 @@ async function toggleImportant(emailId, isCurrentlyImportant) {
         alert('Error updating important status. Please try again.');
     }
 }
-
-function enhanceComposeEditor() {
-    console.log('Enhancing compose editor...');
-    
-    // Create toolbar HTML with reordered buttons according to preference
-    const toolbarHTML = `
-        <div class="compose-toolbar">
-            <select id="font-size" title="Font Size">
-                <option value="1">Small</option>
-                <option value="3" selected>Normal</option>
-                <option value="5">Large</option>
-                <option value="7">Very Large</option>
-            </select>
-            <span class="separator"></span>
-            <button type="button" data-command="bold" title="Bold (Ctrl+B)">B</button>
-            <button type="button" data-command="italic" title="Italic (Ctrl+I)">I</button>
-            <button type="button" data-command="underline" title="Underline (Ctrl+U)">U</button>
-            <span class="separator"></span>
-            <button type="button" data-command="insertOrderedList" title="Numbered List">1.</button>
-            <button type="button" data-command="insertUnorderedList" title="Bullet List">•</button>
-            <span class="separator"></span>
-            <button type="button" data-command="createLink" title="Insert Link">Link</button>
-        </div>
-    `;
-    
-    // Rest of the function remains the same
-    try {
-        // Get the compose modal and compose body
-        const composeModal = document.getElementById('compose-modal');
-        const composeBody = document.getElementById('compose-body');
-        
-        if (!composeBody) {
-            console.error('Cannot find compose-body element');
-            return;
-        }
-        
-        // Get the original dimensions before replacement
-        const originalWidth = composeBody.offsetWidth;
-        const originalHeight = composeBody.offsetHeight;
-        console.log('Original compose area dimensions:', originalWidth, 'x', originalHeight);
-        
-        // Create container for toolbar + editor
-        const editorContainer = document.createElement('div');
-        editorContainer.className = 'editor-container';
-        editorContainer.style.width = originalWidth + 'px';
-        editorContainer.style.minHeight = originalHeight + 'px';
-        editorContainer.innerHTML = toolbarHTML;
-        
-        // Create editable div to replace textarea
-        const editor = document.createElement('div');
-        editor.className = 'compose-editor';
-        editor.contentEditable = true;
-        editor.innerHTML = composeBody.value || '';
-        
-        // Add editor to container
-        editorContainer.appendChild(editor);
-        
-        // Replace textarea with editor container
-        composeBody.parentNode.replaceChild(editorContainer, composeBody);
-        console.log('Compose editor replaced with rich text editor');
-        
-        // Handle toolbar button clicks
-        editorContainer.querySelectorAll('[data-command]').forEach(button => {
-            button.addEventListener('click', function() {
-                const command = this.getAttribute('data-command');
-                
-                if (command === 'createLink') {
-                    const url = prompt('Enter the link URL:', 'https://');
-                    if (url) document.execCommand(command, false, url);
-                } else {
-                    document.execCommand(command, false, null);
-                }
-                
-                editor.focus();
-            });
-        });
-        
-        // Handle font size changes
-        const fontSizeSelect = document.getElementById('font-size');
-        if (fontSizeSelect) {
-            fontSizeSelect.addEventListener('change', function() {
-                document.execCommand('fontSize', false, this.value);
-                editor.focus();
-            });
-        }
-        
-        // Store a reference to the editor
-        window.emailEditor = editor;
-        
-    } catch (error) {
-        console.error('Error enhancing compose editor:', error);
-    }
-}
-
-// Add this function to check the DOM structure
-function debugDOMStructure() {
-    console.log('======= Debugging DOM Structure =======');
-    console.log('Compose button:', document.querySelector('.compose-btn'));
-    console.log('Compose modal:', document.getElementById('compose-modal'));
-    
-    // List all modals and popups in the document
-    const allModals = document.querySelectorAll('.modal, [id*="modal"], [class*="modal"]');
-    console.log('All modals in document:', allModals);
-    
-    // Check form fields
-    console.log('Compose to field:', document.getElementById('compose-to'));
-    console.log('Compose subject field:', document.getElementById('compose-subject'));
-    console.log('Compose body field:', document.getElementById('compose-body'));
-}
-
-// Call this function after the DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Add this call to the existing DOMContentLoaded handler
-    setTimeout(debugDOMStructure, 1000);
-    
-    // Add a direct click handler to the compose button for testing
-    const composeBtn = document.querySelector('.compose-btn');
-    if (composeBtn) {
-        composeBtn.addEventListener('click', (e) => {
-            console.log('Compose button clicked directly');
-            e.preventDefault();
-            checkComposeModal();
-            openComposeModal();
-        });
-    }
-});
-
-// Add this function to the global window object so it can be called from anywhere
-// including inline onclick handlers
-window.closeComposeModal = function() {
-    console.log('Close compose modal called');
-    const modal = document.getElementById('compose-modal');
-    if (modal) {
-        modal.style.display = 'none';
-        console.log('Modal hidden');
-        
-        // Reset any form data
-        const form = document.querySelector('.compose-form');
-        if (form) form.reset();
-    }
-};
-
-// This function will extract the AI-generated email and show it in a compose window
-window.moveEmailToComposeWindow = function(emailText) {
-    console.log('Moving email to compose window...');
-    
-    try {
-        // First, open the compose modal
-        const composeModal = document.getElementById('compose-modal');
-        if (!composeModal) {
-            console.error('Compose modal not found');
-            alert('Could not find compose window. Please try clicking compose first.');
-            return false;
-        }
-        
-        // Get the form fields
-        const toField = document.getElementById('compose-to');
-        const subjectField = document.getElementById('compose-subject');
-        const bodyField = document.getElementById('compose-body');
-        
-        if (!subjectField || !bodyField) {
-            console.error('Required compose fields not found');
-            alert('Compose form fields not found. Please try again.');
-            return false;
-        }
-        
-        // Parse the email text for subject and body
-        let subject = '';
-        let body = emailText;
-        
-        const subjectMatch = emailText.match(/Subject:\s*(.*?)(?:\n|$)/);
-        if (subjectMatch && subjectMatch[1]) {
-            subject = subjectMatch[1].trim();
-            // Remove the subject line from the body
-            body = body.replace(/Subject:\s*.*?(?:\n|$)/, '').trim();
-        }
-        
-        // Set values
-        subjectField.value = subject;
-        bodyField.value = body;
-        
-        // Display the modal
-        composeModal.style.display = 'block';
-        setTimeout(() => composeModal.classList.add('show'), 50);
-        
-        // Add inline onclick handlers to close buttons
-        const closeButtons = document.querySelectorAll('.compose-close, .modal-close, .cancel-btn, .close-btn');
-        closeButtons.forEach(btn => {
-            btn.setAttribute('onclick', 'window.closeComposeModal()');
-        });
-        
-        return true;
-    } catch (error) {
-        console.error('Error moving email to compose:', error);
-        alert('Error setting email content. Please try again.');
-        return false;
-    }
-};
-
-// Add this to the DOMContentLoaded event to fix modal close buttons
-document.addEventListener('DOMContentLoaded', function() {
-    // Fix for modal close/cancel buttons
-    document.querySelectorAll('.compose-modal .close, .compose-modal .cancel-btn, .compose-close')
-        .forEach(button => {
-            // Remove any existing click handlers
-            const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
-            
-            // Add direct onclick attribute
-            newButton.setAttribute('onclick', 'window.closeComposeModal()');
-            console.log('Added close handler to button:', newButton);
-        });
-    
-    // Add handler for clicking outside modal
-    window.addEventListener('click', function(event) {
-        const modal = document.getElementById('compose-modal');
-        if (modal && event.target === modal) {
-            window.closeComposeModal();
-        }
-    });
-    
-    // Add direct handlers to all compose modal buttons
-    setTimeout(() => {
-        const composeModal = document.getElementById('compose-modal');
-        if (composeModal) {
-            // Find all close/cancel buttons within the modal
-            composeModal.querySelectorAll('button, .close, [class*="close"], [class*="cancel"]')
-                .forEach(btn => {
-                    if (btn.textContent.match(/close|cancel|x/i) || btn.classList.contains('close')) {
-                        btn.onclick = window.closeComposeModal;
-                        console.log('Added close handler to button:', btn);
-                    }
-                });
-            
-            // Add inline attribute as a fallback
-            composeModal.querySelectorAll('button, .close, [class*="close"], [class*="cancel"]')
-                .forEach(btn => {
-                    if (btn.textContent.match(/close|cancel|x/i) || btn.classList.contains('close')) {
-                        btn.setAttribute('onclick', 'window.closeComposeModal()');
-                    }
-                });
-        }
-    }, 1000);
-});
-
-// Add a simple function to directly open the compose modal
-function openComposeWindow() {
-    const modal = document.getElementById('compose-modal');
-    if (modal) {
-        modal.style.display = 'block';
-        setTimeout(() => modal.classList.add('show'), 50);
-        
-        // Reset form fields
-        const toField = document.getElementById('compose-to');
-        const subjectField = document.getElementById('compose-subject');
-        const bodyField = document.getElementById('compose-body');
-        
-        if (toField) toField.value = '';
-        if (subjectField) subjectField.value = '';
-        if (bodyField) bodyField.value = '';
-    } else {
-        console.error('Compose modal not found');
-    }
-}
-
-// Add this function to directly close the compose modal
-function closeComposeModal() {
-    console.log('Close compose modal called');
-    const modal = document.getElementById('compose-modal');
-    if (modal) {
-        modal.style.display = 'none';
-        modal.classList.remove('show');
-        console.log('Modal hidden');
-        
-        // Reset form fields if needed
-        const form = document.querySelector('.compose-form');
-        if (form) form.reset();
-    }
-}
-
-// Add this to ensure close buttons work on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Get all close buttons
-    const closeButtons = document.querySelectorAll('.close-modal, .modal-footer button:last-child');
-    
-    closeButtons.forEach(button => {
-        // Remove any existing handlers
-        const newButton = button.cloneNode(true);
-        if (button.parentNode) {
-            button.parentNode.replaceChild(newButton, button);
-        }
-        
-        // Add a direct onclick handler
-        newButton.onclick = closeComposeModal;
-        console.log('Added close handler to', newButton.tagName, newButton.className);
-    });
-    
-    // Also handle ESC key to close modal
-    document.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') {
-            closeComposeModal();
-        }
-    });
-});
