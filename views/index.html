@@ -1795,6 +1795,40 @@
         .email-important:hover {
             transform: scale(1.2);
         }
+
+        .editor-toolbar {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+        }
+        
+        .editor-btn {
+            background-color: #f1f3f4;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .editor-btn:hover {
+            background-color: #e8eaed;
+        }
+        
+        #compose-body {
+            background-color: white;
+            border-radius: 4px;
+            min-height: 250px;
+            max-height: 250px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        #compose-body:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
     </style>
 </head>
 <body>
@@ -1932,13 +1966,15 @@
                         </div>
                     </div>
                     <div class="compose-area">
-                        <textarea id="compose-body" placeholder="Write your message here..." style="height: 250px;"></textarea>
+                        <div id="compose-body" contenteditable="true" style="height: 250px; border: 1px solid #ccc; padding: 8px; overflow-y: auto;"></div>
                         <div class="editor-toolbar">
                             <button class="editor-btn" onclick="formatText('bold')"><b>B</b></button>
                             <button class="editor-btn" onclick="formatText('italic')"><i>I</i></button>
                             <button class="editor-btn" onclick="formatText('underline')"><u>U</u></button>
                             <button class="editor-btn" onclick="formatText('link')">Link</button>
                         </div>
+                        <!-- Hidden textarea to store content for moveToCompose -->
+                        <textarea id="compose-body-hidden" style="display: none;"></textarea>
                     </div>
                 </div>
             </div>
@@ -1950,68 +1986,46 @@
     </div>
     <script>
         function formatText(format) {
-            const textarea = document.getElementById('compose-body');
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const selectedText = textarea.value.substring(start, end);
+            // Use document.execCommand for rich text formatting
+            document.execCommand(format, false, null);
             
-            if (selectedText.length === 0) return;
-            
-            // Apply visual formatting directly to the textarea by wrapping with markers
-            // We'll use common markdown-style markers that indicate the formatting visually
-            let prefix = '';
-            let suffix = '';
-            
-            switch(format) {
-                case 'bold':
-                    prefix = '**';
-                    suffix = '**';
-                    break;
-                case 'italic':
-                    prefix = '*';
-                    suffix = '*';
-                    break;
-                case 'underline':
-                    prefix = '_';
-                    suffix = '_';
-                    break;
-                case 'link':
-                    const url = prompt('Enter URL:', 'http://');
-                    if (url) {
-                        prefix = '[';
-                        suffix = `](${url})`;
-                    } else {
-                        return;
-                    }
-                    break;
+            // For links we need special handling
+            if (format === 'link') {
+                const url = prompt('Enter URL:', 'http://');
+                if (url) {
+                    document.execCommand('createLink', false, url);
+                }
             }
             
-            // Insert formatting markers
-            textarea.value = 
-                textarea.value.substring(0, start) + 
-                prefix + selectedText + suffix + 
-                textarea.value.substring(end);
-            
-            // Update cursor position to be after the formatted text
-            const newCursorPos = end + prefix.length + suffix.length;
-            textarea.setSelectionRange(newCursorPos, newCursorPos);
-            
-            // Restore focus to the textarea
-            textarea.focus();
+            // Update the hidden textarea with the HTML content for moveToCompose
+            updateHiddenTextarea();
         }
         
-        // Modify the sendEmail function to prepare proper HTML content
-        const originalSendEmail = window.sendEmail;
-        window.sendEmail = function() {
-            const textarea = document.getElementById('compose-body');
-            const content = textarea.value;
+        // Function to update the hidden textarea with the formatted content
+        function updateHiddenTextarea() {
+            const editableDiv = document.getElementById('compose-body');
+            const hiddenTextarea = document.getElementById('compose-body-hidden');
+            hiddenTextarea.value = editableDiv.innerHTML;
+        }
+        
+        // Add event listener to update hidden textarea on content changes
+        document.getElementById('compose-body').addEventListener('input', updateHiddenTextarea);
+        
+        // Modify moveToCompose to use our hidden textarea instead
+        const originalMoveEmailToCompose = moveEmailToCompose;
+        window.moveEmailToCompose = function(emailContent) {
+            // Get the contenteditable div
+            const editableDiv = document.getElementById('compose-body');
             
-            // Convert markdown-style formatting to HTML before sending
-            // This is what we could add to the sendEmail function to convert the formatting
-            // This doesn't affect the moveToCompose feature since we're just modifying at send time
+            // Set the formatted content to the div instead of a textarea
+            editableDiv.innerHTML = emailContent;
             
-            // For now, just call the original function
-            originalSendEmail();
+            // Update the hidden textarea for compatibility
+            updateHiddenTextarea();
+            
+            // Then call any other logic from the original function
+            // Remove this if it causes issues
+            // originalMoveEmailToCompose(emailContent);
         };
     </script>
 </body>

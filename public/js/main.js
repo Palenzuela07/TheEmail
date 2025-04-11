@@ -1826,14 +1826,11 @@ async function generateAIReply(emailBody) {
     }
 }
 
-function moveToCompose(aiResponse) {
-    console.log('Setting compose body with AI response'); // Debugging log
-    document.getElementById('compose-body').value = aiResponse;
-    // Ensure the compose modal is open
-    const modal = document.getElementById('compose-modal');
-    if (!modal.classList.contains('show')) {
-        openComposeModal();
-    }
+// Modify moveToCompose to use our hidden textarea instead
+function moveToCompose(text) {
+    const editableDiv = document.getElementById('compose-body');
+    editableDiv.innerHTML = text;
+    updateHiddenTextarea();
 }
 
 // Utility function to escape HTML
