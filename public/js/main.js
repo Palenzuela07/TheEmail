@@ -20,91 +20,86 @@ function resetComposeWindow() {
 
 // Consolidated function to move content to compose window
 function moveToCompose(content, to = '', subject = '') {
-    // First ensure compose modal is open
-    const modal = document.getElementById('compose-modal');
-    const isModalClosed = !modal || modal.style.display === 'none';
+    openComposeModal(null);
     
-    if (isModalClosed) {
-        // Open the compose modal first
-        openComposeModal(null);
-        
-        // Small delay to ensure modal is rendered
-        setTimeout(() => {
-            populateComposeFields(content, to, subject);
-        }, 100);
-    } else {
-        // Modal already open, populate immediately
-        populateComposeFields(content, to, subject);
-    }
+    // Populate the fields with the provided content, to, and subject
+    populateComposeFields(content, to, subject);
 }
 
 // Helper function to actually populate the fields
 function populateComposeFields(content, to = '', subject = '') {
-    // Get compose fields
     const toField = document.getElementById('compose-to');
     const subjectField = document.getElementById('compose-subject');
     const bodyField = document.getElementById('compose-body');
     
-    // Check if fields exist before setting values
-    if (!toField || !subjectField || !bodyField) {
-        console.error('Compose fields not found');
-        return false;
-    }
-    
-    // If content appears to be a full email, extract parts
-    if (typeof content === 'string' && content.includes('Subject:')) {
-        // Extract subject if present and not already specified
-        if (!subject) {
-            const subjectMatch = content.match(/Subject: (.*?)(?:\n|$)/);
-            if (subjectMatch) {
-                subject = subjectMatch[1].trim();
-                // Remove the Subject line from the content
-                content = content.replace(/Subject:.*?\n/, '');
-            }
-        }
-        
-        // Extract To if present and not already specified
-        if (!to) {
-            const toMatch = content.match(/To: (.*?)(?:\n|$)/);
-            if (toMatch) {
-                to = toMatch[1].trim();
-                // Remove the To line from the content
-                content = content.replace(/To:.*?\n/, '');
-            }
-        }
-    }
-    
-    // Set values to fields
-    if (to) toField.value = to;
-    if (subject) subjectField.value = subject;
-    if (content) bodyField.value = content;
-    
-    // Auto-resize body field if needed
-    if (bodyField.style && bodyField.scrollHeight > bodyField.clientHeight) {
-        bodyField.style.height = bodyField.scrollHeight + 'px';
-    }
-    
-    return true;
+    if (toField && to) toField.value = to;
+    if (subjectField && subject) subjectField.value = subject;
+    if (bodyField && content) bodyField.value = content;
 }
 
 // Update existing functions to use the new consolidated moveToCompose
 
 // Alias for backward compatibility
 function moveEmailToCompose(emailContent) {
-    return moveToCompose(emailContent);
+    // Extract subject from the email content
+    const subject = emailContent.subject || '';
+    const to = emailContent.from || '';
+    const body = emailContent.body || '';
+    
+    // Pass all three parameters to moveToCompose
+    moveToCompose(body, to, subject);
 }
 
 // Alias for backward compatibility
 function moveLastAIMessageToCompose(messages) {
-    // Find the last AI message with email content
-    let emailContent = '';
-    for (let i = messages.length - 1; i >= 0; i--) {
-        if (messages[i].role === 'assistant' && containsEmailFormat(messages[i].content)) {
-            emailContent = messages[i].content;
-            break;
+    // Extract the last AI message
+    const lastAIMessage = messages.filter(m => m.role === 'assistant').pop();
+    
+    if (lastAIMessage) {
+        // Check if content contains email format with subject
+        const content = lastAIMessage.content;
+        let subject = '';
+        let body = content;
+        
+        // Better subject detection patterns
+        const subjectPatterns = [
+            /Subject:(.+?)(?:\n|$)/i,
+            /Subject line:(.+?)(?:\n|$)/i,
+            /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
+            /^RE:(.+?)(?:\n|$)/i,
+            /^Re:(.+?)(?:\n|$)/i,
+        ];
+        
+        // Try each pattern to extract subject
+        for (const pattern of subjectPatterns) {
+            const match = content.match(pattern);
+            if (match && match[1]) {
+                subject = match[1].trim();
+                // Remove the subject line from the body
+                body = body.replace(pattern, '').trim();
+                break;
+            }
         }
+        
+        // If we still don't have a subject, look for the first line that might be a subject
+        if (!subject && body.includes('\n')) {
+            const firstLine = body.split('\n')[0].trim();
+            // If the first line is short and doesn't look like a greeting, it might be a subject
+            if (firstLine.length < 80 && 
+                !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
+                subject = firstLine;
+                body = body.substring(firstLine.length).trim();
+            }
+        }
+        
+        // Clean up the body (remove extra lines at beginning)
+        body = body.replace(/^\s*\n+/g, '');
+        
+        moveToCompose(body, '', subject);
+        return true; // Return success
     }
-    return moveToCompose(emailContent);
+    
+    return false; // Return failure if no AI message found
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1138,20 +1133,31 @@ async function sendChatMessage() {
 
 // Improve email detection function
 function containsEmailFormat(text) {
+    // Log the text being checked
+    console.log("Checking for email format:", text.substring(0, 50) + "...");
+
     // Check for common email components - make more lenient
-    return (
-        // Check for subject line
-        (text.includes("Subject:") || text.includes("SUBJECT:")) &&
-        
-        // Check for greeting - more options
-        (text.includes("Dear") || text.includes("Hello") || text.includes("Hi") || 
-         text.includes("Hey") || text.includes("Greetings")) &&
-        
-        // Check for closing - more options
-        (text.includes("Sincerely") || text.includes("Best") || text.includes("Regards") || 
-         text.includes("Thank you") || text.includes("Thanks") || text.includes("Cheers") ||
-         text.includes("Yours") || text.includes("Warm") || text.includes("See you"))
-    );
+    const hasSubject = text.includes("Subject:") || text.includes("SUBJECT:") || 
+                      text.match(/^([A-Za-z\s]+):\s*[A-Za-z]/m) !== null;
+    
+    // Check for greeting
+    const hasGreeting = text.includes("Dear") || text.includes("Hello") || 
+                       text.includes("Hi") || text.includes("Hey") || 
+                       text.includes("Greetings") || text.match(/^[A-Za-z\s,]+,/m) !== null;
+    
+    // Check for closing
+    const hasClosing = text.includes("Sincerely") || text.includes("Best") || 
+                      text.includes("Regards") || text.includes("Thank you") || 
+                      text.includes("Thanks") || text.includes("Cheers") ||
+                      text.includes("Yours") || text.includes("Warm") || 
+                      text.includes("See you");
+    
+    console.log("Email format detection:", {hasSubject, hasGreeting, hasClosing});
+    
+    // Return true if at least 2 of the 3 components are found
+    return (hasSubject && hasGreeting) || 
+           (hasSubject && hasClosing) || 
+           (hasGreeting && hasClosing);
 }
 
 // Simplify handleChatKeyPress to focus on confirmation
@@ -1183,7 +1189,7 @@ function handleChatKeyPress(event) {
             
             if (isConfirmation) {
                 console.log("Confirmation received, moving to compose");
-                // Move content to compose area
+                // Move content to compose area - we pass the raw string, our implementation will extract the subject
                 moveEmailToCompose(window.lastGeneratedEmail);
                 
                 // Show confirmation message

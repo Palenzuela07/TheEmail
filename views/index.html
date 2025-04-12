@@ -1949,7 +1949,7 @@
             </div>
             <div class="modal-body">
                 <input type="text" id="compose-to" placeholder="To">
-                <input type="text" id="compose-subject" placeholder="Subject">
+                <input type="text" id="compose-subject" placeholder="Subject" style="font-weight: bold; font-size: 16px; padding: 8px; width: 100%; margin-bottom: 10px; border: 1px solid #1a73e8;">
                 <div class="compose-split-view">
                     <div class="ai-suggestions">
                         <h3>AI Assistant</h3>
@@ -2014,18 +2014,67 @@
         // Modify moveToCompose to use our hidden textarea instead
         const originalMoveEmailToCompose = moveEmailToCompose;
         window.moveEmailToCompose = function(emailContent) {
+            console.log("moveEmailToCompose called with:", emailContent);
+            // Extract subject from the email content
+            let subject = '';
+            let body = emailContent;
+            
+            // Try to extract subject line
+            const subjectPatterns = [
+                /Subject:(.+?)(?:\n|$)/i,
+                /Subject line:(.+?)(?:\n|$)/i,
+                /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
+                /^RE:(.+?)(?:\n|$)/i,
+                /^Re:(.+?)(?:\n|$)/i,
+                /^FWD:(.+?)(?:\n|$)/i,
+                /^Fwd:(.+?)(?:\n|$)/i,
+                // Capture the first line if it ends with a colon and isn't a greeting
+                /^([^:]{1,60}):\s*$/m,
+                // Potential subject lines at the beginning of text
+                /^([A-Za-z0-9].*?)(?:\n|$)/
+            ];
+            
+            // Try each pattern to extract subject
+            for (const pattern of subjectPatterns) {
+                const match = emailContent.match(pattern);
+                if (match && match[1]) {
+                    subject = match[1].trim();
+                    console.log("Subject extracted:", subject);
+                    // Remove the subject line from the body
+                    body = body.replace(pattern, '').trim();
+                    break;
+                }
+            }
+            
+            // If we still don't have a subject, look for the first line that might be a subject
+            if (!subject && body.includes('\n')) {
+                const firstLine = body.split('\n')[0].trim();
+                // If the first line is short and doesn't look like a greeting, it might be a subject
+                if (firstLine.length < 80 && 
+                    !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
+                    subject = firstLine;
+                    console.log("First line as subject:", subject);
+                    body = body.substring(firstLine.length).trim();
+                }
+            }
+            
             // Get the contenteditable div
             const editableDiv = document.getElementById('compose-body');
+            const subjectField = document.getElementById('compose-subject');
+            
+            console.log("Found subject field:", !!subjectField);
             
             // Set the formatted content to the div instead of a textarea
-            editableDiv.innerHTML = emailContent;
+            editableDiv.innerHTML = body;
+            
+            // Set the subject if found
+            if (subject && subjectField) {
+                console.log("Setting subject field to:", subject);
+                subjectField.value = subject;
+            }
             
             // Update the hidden textarea for compatibility
             updateHiddenTextarea();
-            
-            // Then call any other logic from the original function
-            // Remove this if it causes issues
-            // originalMoveEmailToCompose(emailContent);
         };
     </script>
 </body>
