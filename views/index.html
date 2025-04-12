@@ -825,7 +825,7 @@
             bottom: 0;
             right: 24px;
             width: 800px;
-            height: 600px;
+            height: 650px;
             background: white;
             z-index: 1000;
             border-radius: 8px 8px 0 0;
@@ -948,6 +948,8 @@
             position: relative;
             height: 100%;
             background: white;
+            display: flex;
+            flex-direction: column;
         }
 
         .compose-area::before {
@@ -986,7 +988,16 @@
         }
 
         #compose-body {
-            height: calc(100% - 30px);
+            flex: 1;
+            min-height: 200px;
+            background-color: white;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            line-height: 1.4;
+            border: 1px solid #ccc;
+            padding: 8px;
+            overflow-y: auto;
         }
 
         .modal {
@@ -1803,22 +1814,36 @@
         }
 
         .editor-toolbar {
-            margin-top: 8px;
+            margin-bottom: 8px;
             display: flex;
             gap: 8px;
+            padding: 6px;
+            background-color: #f8f9fa;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
         }
         
         .editor-btn {
-            background-color: #f1f3f4;
-            border: none;
+            background-color: #fff;
+            border: 1px solid #dadce0;
             border-radius: 4px;
             padding: 6px 12px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: all 0.2s;
+            min-width: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .editor-btn:hover {
+            background-color: #f1f3f4;
+            border-color: #c6c6c6;
+        }
+        
+        .editor-btn:active {
             background-color: #e8eaed;
+            border-color: #a8a8a8;
         }
         
         #compose-body {
@@ -1972,13 +1997,21 @@
                         </div>
                     </div>
                     <div class="compose-area">
-                        <div id="compose-body" contenteditable="true" style="height: 250px; border: 1px solid #ccc; padding: 8px; overflow-y: auto;"></div>
-                        <div class="editor-toolbar">
-                            <button class="editor-btn" onclick="formatText('bold')"><b>B</b></button>
-                            <button class="editor-btn" onclick="formatText('italic')"><i>I</i></button>
-                            <button class="editor-btn" onclick="formatText('underline')"><u>U</u></button>
-                            <button class="editor-btn" onclick="formatText('link')">Link</button>
+                        <div class="editor-toolbar" style="margin-bottom: 8px;">
+                            <button class="editor-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
+                            <button class="editor-btn" onclick="formatText('italic')" title="Italic"><i>I</i></button>
+                            <button class="editor-btn" onclick="formatText('underline')" title="Underline"><u>U</u></button>
+                            <span style="width: 1px; background: #dadce0; margin: 0 4px;"></span>
+                            <button class="editor-btn" onclick="formatText('justifyLeft')" title="Align Left">⇤</button>
+                            <button class="editor-btn" onclick="formatText('justifyCenter')" title="Center">⇋</button>
+                            <button class="editor-btn" onclick="formatText('justifyRight')" title="Align Right">⇥</button>
+                            <span style="width: 1px; background: #dadce0; margin: 0 4px;"></span>
+                            <button class="editor-btn" onclick="formatText('insertUnorderedList')" title="Bullet List">•</button>
+                            <button class="editor-btn" onclick="formatText('insertOrderedList')" title="Numbered List">1.</button>
+                            <span style="width: 1px; background: #dadce0; margin: 0 4px;"></span>
+                            <button class="editor-btn" onclick="formatText('link')" title="Insert Link">🔗</button>
                         </div>
+                        <div id="compose-body" contenteditable="true"></div>
                         <!-- Hidden textarea to store content for moveToCompose -->
                         <textarea id="compose-body-hidden" style="display: none;"></textarea>
                     </div>
