@@ -109,12 +109,14 @@ app.post('/api/chat', async (req, res) => {
 KEY INSTRUCTIONS FOR EMAILS:
 1. For email requests - NEVER ask for more details, just create the email IMMEDIATELY
 2. When user says "write email to [person] about [topic]" - generate complete email right away
-3. All emails MUST follow this exact format:
-   - Include "Subject: [clear subject line]" at the top
+3. All emails MUST follow this EXACT format:
+   - Start with "Subject: [clear subject line]" on the first line
+   - Add a blank line
    - Add a proper greeting like "Dear [name]," or "Hello,"
    - Write the email body with clear paragraphs
+   - Add a blank line
    - End with a closing like "Best regards," or "Sincerely,"
-   - Add a signature line
+   - Add a signature line with the user's name
 4. Never invent information not provided by the user
 5. Keep emails simple and focused on the requested topic
 6. Always generate complete, ready-to-send emails in proper format
@@ -124,7 +126,7 @@ For general questions, provide friendly, conversational responses.
 
 For email example:
 Subject: Meeting Request for Project Discussion
- 
+
 Dear Team,
 
 I hope this email finds you well. I would like to schedule a meeting to discuss our current project status.
@@ -132,7 +134,7 @@ I hope this email finds you well. I would like to schedule a meeting to discuss 
 Please let me know your availability for this week.
 
 Best regards,
-[Name]`
+[User's Name]`
     };
     
     console.log(`Processing chat. History items: ${history ? history.length : 0}, Time: ${currentTime}`);

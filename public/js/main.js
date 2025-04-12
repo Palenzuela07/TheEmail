@@ -388,6 +388,14 @@ async function initializeAPI() {
         CLIENT_ID = credentials.clientId;
         API_KEY = credentials.apiKey;
         
+        // Store the OpenAI API key properly
+        if (credentials.openaiKey) {
+            OPENAI_API_KEY = credentials.openaiKey;
+            console.log('OpenAI API key retrieved successfully');
+        } else {
+            console.warn('OpenAI API key not found in server response');
+        }
+        
         // Continue with Google API initialization
         gapi.load('client', async () => {
             try {
@@ -1219,21 +1227,23 @@ async function sendChatMessage() {
 
 // Improve email detection function
 function containsEmailFormat(text) {
-    // Log the full text being checked for debugging
-    console.log("Checking for email format - Full text:", text);
+    if (!text) return false;
+    
+    // Log the first part of text being checked for debugging
+    DEBUG("Checking for email format", { preview: text.substring(0, 100) + "..." });
 
-    // Check for common email components - make more lenient
+    // Check for common email components
     const hasSubject = text.includes("Subject:") || text.includes("SUBJECT:") || 
                       text.match(/^([A-Za-z\s]+):\s*[A-Za-z]/m) !== null ||
                       text.match(/^(Re|RE|Fwd|FWD):/m) !== null;
     
-    // Check for greeting - be more permissive
+    // Check for greeting
     const hasGreeting = text.includes("Dear") || text.includes("Hello") || 
                        text.includes("Hi") || text.includes("Hey") || 
                        text.includes("Greetings") || text.match(/^[A-Za-z\s,]+,/m) !== null ||
                        text.match(/^To whom/i) !== null || text.match(/^Good (morning|afternoon|evening)/i) !== null;
     
-    // Check for closing - be more permissive
+    // Check for closing
     const hasClosing = text.includes("Sincerely") || text.includes("Best") || 
                       text.includes("Regards") || text.includes("Thank you") || 
                       text.includes("Thanks") || text.includes("Cheers") ||
@@ -1245,11 +1255,9 @@ function containsEmailFormat(text) {
     const hasMultipleLines = text.split('\n').length > 3;
     const hasSignature = text.includes("\n\n") && text.length > 100;
     
-    console.log("Email format detection:", {hasSubject, hasGreeting, hasClosing, hasMultipleLines, hasSignature});
+    DEBUG("Email format detection results:", {hasSubject, hasGreeting, hasClosing, hasMultipleLines, hasSignature});
     
-    // Return true if either:
-    // 1. Has at least 2 of the 3 main components
-    // 2. Has one component and looks like an email structure
+    // Return true if the text has the structure of an email
     return (hasSubject && hasGreeting) || 
            (hasSubject && hasClosing) || 
            (hasGreeting && hasClosing) ||
@@ -1258,7 +1266,7 @@ function containsEmailFormat(text) {
            (hasClosing && hasMultipleLines && hasSignature);
 }
 
-// Simplify handleChatKeyPress to focus on confirmation
+// Improve handleChatKeyPress to better handle confirmation
 function handleChatKeyPress(event) {
     if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault();
@@ -1287,11 +1295,16 @@ function handleChatKeyPress(event) {
             DEBUG("Is confirmation?", isConfirmation);
             
             if (isConfirmation) {
-                DEBUG("Confirmation received, moving to compose", window.lastGeneratedEmail?.substring(0, 50) + "...");
+                DEBUG("Confirmation received", {
+                    hasLastGeneratedEmail: !!window.lastGeneratedEmail,
+                    preview: window.lastGeneratedEmail ? 
+                        window.lastGeneratedEmail.substring(0, 50) + "..." : 
+                        "No content"
+                });
                 
                 // Check if lastGeneratedEmail exists and is not empty
                 if (!window.lastGeneratedEmail) {
-                    DEBUG("ERROR: lastGeneratedEmail is empty or null", window.lastGeneratedEmail);
+                    DEBUG("ERROR: lastGeneratedEmail is empty or null");
                     
                     messages.innerHTML += `
                         <div class="chat-message ai">
@@ -1309,13 +1322,15 @@ function handleChatKeyPress(event) {
                 }
                 
                 try {
-                    // Move content to compose area - we pass the raw string, our implementation will extract the subject
-                    moveEmailToCompose(window.lastGeneratedEmail);
+                    // Move content to compose area
+                    const success = moveEmailToCompose(window.lastGeneratedEmail);
                     
                     // Show confirmation message
                     messages.innerHTML += `
                         <div class="chat-message ai">
-                            I've moved the email to the compose area for you.
+                            ${success ? 
+                                "I've moved the email to the compose area for you. You can edit it there before sending." : 
+                                "I had trouble moving the email to the compose area. Please try again or let me generate a new email."}
                         </div>
                     `;
                 } catch (error) {
@@ -1336,11 +1351,13 @@ function handleChatKeyPress(event) {
             // Clear confirmation state regardless of response
             window.awaitingEmailConfirmation = false;
             window.lastGeneratedEmail = null;
-            
         } else {
             // Regular chat message
             sendChatMessage();
         }
+        
+        // Scroll to bottom in all cases
+        messages.scrollTop = messages.scrollHeight;
     }
 }
 
@@ -1687,37 +1704,129 @@ function debounce(func, wait) {
 }
 
 async function generateAIEmail() {
-    const prompt = document.getElementById('ai-prompt').value;
-    if (!prompt) {
-        alert('Please describe the email you want to write');
-        return;
-    }
-
     try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        DEBUG("Starting email generation");
+        // Show the AI chat panel if it's not already visible
+        document.getElementById('ai-chat-panel').style.display = 'block';
+        
+        // Get chat input and messages
+        const chatInput = document.getElementById('chat-input');
+        const messagesContainer = document.getElementById('chat-messages');
+        
+        if (!chatInput || !messagesContainer) {
+            DEBUG("ERROR: Chat elements not found");
+            throw new Error("Chat interface elements not found");
+        }
+        
+        // Display "thinking" message 
+        messagesContainer.innerHTML += `
+            <div class="chat-message user">
+                ${escapeHtml(chatInput.value)}
+            </div>
+            <div class="chat-message ai" id="loading-message">
+                <em>Generating your email...</em>
+            </div>
+        `;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        // Create a specific prompt for email generation
+        const userMessage = `Write me an email about: ${chatInput.value}`;
+        
+        // Create history array with system prompt
+        const emailHistory = [
+            {
+                role: "system",
+                content: "You are an email writing assistant. Create complete, professional emails with proper structure including subject line, greeting, body and closing. Format the subject line as 'Subject: Your Subject Here'."
+            }
+        ];
+        
+        DEBUG("Sending request to server API for email generation");
+        
+        // Use the server's chat endpoint 
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [{
-                    role: "system",
-                    content: "You are an email writing assistant. Generate a complete email including a proper greeting at the start and a polite closing/signature at the end. Make it professional but friendly."
-                }, {
-                    role: "user",
-                    content: prompt
-                }],
-                temperature: 0.7
+                message: userMessage,
+                history: emailHistory,
+                timestamp: new Date().toISOString()
             })
         });
 
+        if (!response.ok) {
+            const errorText = await response.text();
+            DEBUG("Server API error", { status: response.status, error: errorText });
+            throw new Error(`Server error: ${response.status}`);
+        }
+
         const data = await response.json();
-        document.getElementById('compose-body').value = data.choices[0].message.content;
+        
+        if (!data.response) {
+            DEBUG("Invalid response format from server", data);
+            throw new Error("Invalid response from server");
+        }
+        
+        // Get the generated content
+        const generatedEmail = data.response;
+        DEBUG("Email generation successful", { 
+            length: generatedEmail.length,
+            preview: generatedEmail.substring(0, 100) + "..."
+        });
+        
+        // Remove the loading message
+        const loadingMessage = document.getElementById('loading-message');
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
+        
+        // Show the generated email
+        messagesContainer.innerHTML += `
+            <div class="chat-message ai">
+                ${formatEmailContent(generatedEmail)}
+            </div>
+        `;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        // Open the compose window
+        openComposeModal();
+        
+        // Move the email to compose without waiting for confirmation
+        // Store the generated email for potential future use
+        window.lastGeneratedEmail = generatedEmail;
+        
+        // Automatically move to compose window
+        moveEmailToCompose(generatedEmail);
+        
+        // Clear the chat input
+        chatInput.value = '';
+        
+        return generatedEmail;
     } catch (error) {
+        DEBUG("Error generating email", error);
         console.error('Error generating email:', error);
-        alert('Error generating email. Please try again.');
+        
+        // Display error message
+        const messagesContainer = document.getElementById('chat-messages');
+        const loadingMessage = document.getElementById('loading-message');
+        
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
+        
+        if (messagesContainer) {
+            messagesContainer.innerHTML += `
+                <div class="chat-message ai error-message">
+                    <p>Sorry, I couldn't generate your email. An error occurred:</p>
+                    <p>${error.message || "Unknown error"}</p>
+                    <p>You can try again or compose the email manually.</p>
+                </div>
+            `;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        return null;
     }
 }
 
@@ -1939,6 +2048,8 @@ async function toggleStar(emailId, isCurrentlyStarred) {
 }
 
 async function replyEmail(emailId) {
+    DEBUG("Starting reply to email", emailId);
+    
     // Open the compose modal immediately
     openComposeModal();
 
@@ -1952,11 +2063,18 @@ async function replyEmail(emailId) {
     messages.scrollTop = messages.scrollHeight;
 
     try {
-        const response = await gapi.client.gmail.users.messages.get({
-            'userId': 'me',
-            'id': emailId,
-            'format': 'full'
-        });
+        // Get the email data - GAPI doesn't support native Promise .catch, so we use try/catch
+        let response;
+        try {
+            response = await gapi.client.gmail.users.messages.get({
+                'userId': 'me',
+                'id': emailId,
+                'format': 'full'
+            });
+        } catch (apiError) {
+            DEBUG("Error fetching email from Gmail API", apiError);
+            throw new Error("Failed to fetch email: " + (apiError.message || "Unknown error"));
+        }
 
         const email = response.result;
         const headers = email.payload.headers;
@@ -1968,13 +2086,20 @@ async function replyEmail(emailId) {
 
         const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
         const emailBody = getBody(email.payload);
+        
+        DEBUG("Extracted email info for reply", { 
+            to: replyToEmail, 
+            subject: subject,
+            bodyLength: emailBody?.length || 0
+        });
 
         // Update the compose modal with email details
         document.getElementById('compose-to').value = replyToEmail;
-        document.getElementById('compose-subject').value = `Re: ${subject}`;
+        document.getElementById('compose-subject').value = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
 
         // Generate AI response
         const aiResponse = await generateAIReply(emailBody);
+        DEBUG("AI response received", { responseLength: aiResponse?.length || 0 });
 
         // Store email content globally
         window.lastGeneratedEmail = aiResponse;
@@ -1992,8 +2117,17 @@ async function replyEmail(emailId) {
         messages.scrollTop = messages.scrollHeight;
 
     } catch (error) {
+        DEBUG("Error in replyEmail function", error);
         console.error('Error preparing reply:', error);
-        alert('Error preparing reply. Please try again.');
+        
+        messages.innerHTML = `
+            <div class="chat-message ai">
+                Sorry, I encountered an error while generating a reply: ${error.message || "Unknown error"}
+                
+                You can try again or compose a reply manually.
+            </div>
+        `;
+        messages.scrollTop = messages.scrollHeight;
     }
 }
 
@@ -2016,41 +2150,100 @@ function getBody(payload) {
 
 async function generateAIReply(emailBody) {
     try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        DEBUG("Generating AI reply for email", { bodyLength: emailBody?.length || 0 });
+        
+        // Prepare a better system prompt for email replies
+        const systemPrompt = `You are an email assistant that generates professional replies.
+Write complete email responses with proper structure:
+1. Start with an appropriate greeting
+2. Include 2-3 paragraphs that directly address the email content
+3. End with a professional closing (like "Best regards," or "Sincerely,")
+4. Don't ask questions about what to include - just create a complete reply`;
+
+        // Add this as a conversation history item
+        const replyHistory = [
+            {
+                role: "system",
+                content: systemPrompt
+            },
+            {
+                role: "user",
+                content: `Reply to this email: ${emailBody.trim().substring(0, 1500)}` // Limit length to avoid token issues
+            }
+        ];
+        
+        DEBUG("Sending request to server API");
+        
+        // Use the server's chat endpoint instead of calling OpenAI directly
+        const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OPENAI_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: "gpt-3.5-turbo",
-                messages: [{
-                    role: "system",
-                    content: "You are an email assistant. Generate a polite and professional reply."
-                }, {
-                    role: "user",
-                    content: `Reply to this email: ${emailBody}`
-                }],
-                temperature: 0.7
+                message: `Reply to this email: ${emailBody.trim().substring(0, 1500)}`,
+                history: replyHistory,
+                timestamp: new Date().toISOString()
             })
         });
-
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            DEBUG("Server API error", { status: response.status, error: errorText });
+            throw new Error(`Server error: ${response.status}`);
+        }
+        
         const data = await response.json();
-        return data.choices[0].message.content;
+        
+        if (!data.response) {
+            DEBUG("Invalid response format from server", data);
+            throw new Error("Invalid response from server");
+        }
+        
+        const generatedReply = data.response;
+        DEBUG("Generated reply success", { 
+            length: generatedReply.length,
+            preview: generatedReply.substring(0, 100) + "..."
+        });
+        
+        return generatedReply;
     } catch (error) {
+        DEBUG("Error generating AI reply", error);
         console.error('Error generating AI reply:', error);
-        return 'Error generating reply. Please try again.';
+        
+        // Return a helpful error message that users will understand
+        return `I apologize, but I encountered an error while generating a reply.
+
+This might be due to:
+- Network connectivity issues
+- API rate limits
+- Server configuration problems
+
+You can try again or compose a reply manually.`;
     }
 }
 
 // Modify moveToCompose to use our hidden textarea instead
-function moveToCompose(text) {
+function moveToComposeSimple(text) {
+    DEBUG("moveToComposeSimple called", { textLength: text?.length || 0 });
+    
+    // Use the primary moveToCompose implementation with default values
     const editableDiv = document.getElementById('compose-body');
-    editableDiv.innerHTML = text;
-    updateHiddenTextarea();
+    
+    if (editableDiv) {
+        // Call the main implementation 
+        moveToCompose(text, '', '');
+        
+        // Make sure hidden textarea is updated
+        updateHiddenTextarea();
+    } else {
+        DEBUG("ERROR: compose-body element not found!");
+    }
 }
 
-// Utility function to escape HTML
+/**
+ * Escapes HTML to prevent XSS when displaying user input
+ */
 function escapeHtml(unsafe) {
     return unsafe
         .replace(/&/g, "&amp;")
@@ -2485,10 +2678,35 @@ async function handleDeleteSelected(event) {
     }
 }
 
-// Replace the formatEmailContent function with this simplified version
-function formatEmailContent(content) {
-  // Simply return the content without any formatting
-  return content;
+/**
+ * Improved consolidated formatEmailContent function that combines both implementations
+ * This is now the single source of truth for email formatting
+ */
+function formatEmailContent(emailContent) {
+    // Safety check
+    if (!emailContent) return '';
+    
+    try {
+        // Convert line breaks to HTML breaks
+        let formatted = emailContent.replace(/\n/g, '<br>');
+        
+        // Try to identify and highlight the subject line
+        const subjectMatch = formatted.match(/Subject:(.+?)<br>/i);
+        if (subjectMatch) {
+            formatted = formatted.replace(
+                subjectMatch[0], 
+                `<strong class="email-subject">Subject:${subjectMatch[1]}</strong><br>`
+            );
+        }
+        
+        // Add any additional formatting here
+        
+        return formatted;
+    } catch (error) {
+        DEBUG("Error formatting email content", error);
+        // Fallback to just returning the original content
+        return emailContent;
+    }
 }
 
 async function toggleImportant(emailId, isCurrentlyImportant) {
@@ -2534,3 +2752,99 @@ window.testComposeWindows = function() {
         });
     }, 3000);
 };
+
+// Create an alias for moveToComposeSimple to fix any remaining references
+// This ensures that any code that still refers to the old moveToCompose function
+// will instead call our fixed moveToComposeSimple function
+window.moveToCompose = window.moveToComposeSimple;
+
+/**
+ * Moves generated email content to the compose form, extracting subject if possible
+ */
+function moveEmailToCompose(emailContent) {
+    try {
+        DEBUG("Moving email to compose form", { 
+            contentType: typeof emailContent,
+            preview: typeof emailContent === 'string' ? emailContent.substring(0, 50) + '...' : 'not a string' 
+        });
+        
+        // First open the compose modal
+        openComposeModal();
+        
+        // Look for subject line pattern in the text
+        let subject = '';
+        let body = emailContent;
+        
+        // Check common subject line patterns
+        const subjectPatterns = [
+            /Subject:(.+?)(?:\n|$)/i,
+            /Subject line:(.+?)(?:\n|$)/i,
+            /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
+            /^RE:(.+?)(?:\n|$)/i,
+            /^Re:(.+?)(?:\n|$)/i,
+            /^FWD:(.+?)(?:\n|$)/i,
+            /^Fwd:(.+?)(?:\n|$)/i
+        ];
+        
+        // Try each pattern to extract subject
+        for (const pattern of subjectPatterns) {
+            const match = emailContent.match(pattern);
+            if (match && match[1]) {
+                subject = match[1].trim();
+                DEBUG("Subject extracted:", subject);
+                // Remove the subject line from the body
+                body = body.replace(pattern, '').trim();
+                break;
+            }
+        }
+        
+        // If we still don't have a subject, look for the first line that might be a subject
+        if (!subject && body.includes('\n')) {
+            const firstLine = body.split('\n')[0].trim();
+            // If the first line is short and doesn't look like a greeting, it might be a subject
+            if (firstLine.length < 80 && 
+                !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
+                subject = firstLine;
+                DEBUG("First line as subject:", subject);
+                body = body.substring(firstLine.length).trim();
+            }
+        }
+        
+        // Set subject and body in compose form
+        const subjectField = document.getElementById('compose-subject');
+        const bodyField = document.getElementById('compose-body');
+        
+        DEBUG("Setting compose fields", { 
+            subject,
+            bodyPreview: body.substring(0, 50) + '...',
+            isContentEditable: bodyField ? bodyField.getAttribute('contenteditable') === 'true' : false
+        });
+        
+        if (subjectField) subjectField.value = subject;
+        
+        if (bodyField) {
+            if (bodyField.getAttribute('contenteditable') === 'true') {
+                // For contenteditable, we use innerHTML
+                bodyField.innerHTML = body;
+                
+                // Also update the hidden textarea if it exists
+                const hiddenBody = document.getElementById('compose-body-hidden');
+                if (hiddenBody) hiddenBody.value = body;
+            } else {
+                // For regular textarea, use value
+                bodyField.value = body;
+            }
+        }
+        
+        DEBUG("Email moved to compose form", { 
+            subjectFound: !!subject,
+            bodyLength: body.length
+        });
+        
+        return true;
+    } catch (error) {
+        DEBUG("Error moving email to compose", error);
+        console.error("Error moving email to compose:", error);
+        return false;
+    }
+}

@@ -2407,8 +2407,26 @@
         </div>
     </div>
     <script>
-        // Add event listener to ensure compose modal is properly reset when closed by clicking X
+        // Add event listeners for the contenteditable field
         document.addEventListener('DOMContentLoaded', function() {
+            const composeBody = document.getElementById('compose-body');
+            const hiddenTextarea = document.getElementById('compose-body-hidden');
+            
+            if (composeBody && hiddenTextarea) {
+                // Update hidden textarea on input events
+                composeBody.addEventListener('input', function() {
+                    hiddenTextarea.value = composeBody.innerHTML;
+                });
+                
+                // Also catch paste events which might not trigger input
+                composeBody.addEventListener('paste', function() {
+                    setTimeout(function() {
+                        hiddenTextarea.value = composeBody.innerHTML;
+                    }, 0);
+                });
+            }
+            
+            // Add event listener to ensure compose modal is properly reset when closed by clicking X
             const closeButton = document.querySelector('.close-modal');
             if (closeButton) {
                 closeButton.addEventListener('click', function() {
@@ -2416,6 +2434,15 @@
                 });
             }
         });
+        
+        // Function to update the hidden textarea with the formatted content
+        function updateHiddenTextarea() {
+            const editableDiv = document.getElementById('compose-body');
+            const hiddenTextarea = document.getElementById('compose-body-hidden');
+            if (editableDiv && hiddenTextarea) {
+                hiddenTextarea.value = editableDiv.innerHTML;
+            }
+        }
         
         function formatText(format) {
             // Use document.execCommand for rich text formatting
@@ -2433,13 +2460,6 @@
             updateHiddenTextarea();
         }
         
-        // Function to update the hidden textarea with the formatted content
-        function updateHiddenTextarea() {
-            const editableDiv = document.getElementById('compose-body');
-            const hiddenTextarea = document.getElementById('compose-body-hidden');
-            hiddenTextarea.value = editableDiv.innerHTML;
-        }
-        
         // Add event listener to update hidden textarea on content changes
         document.getElementById('compose-body').addEventListener('input', updateHiddenTextarea);
         
@@ -2451,13 +2471,7 @@
                 ? emailContent.substring(0, 50) + "..." 
                 : emailContent);
                 
-            // Use the implementation from main.js
-            if (originalMoveEmailToCompose) {
-                return originalMoveEmailToCompose(emailContent);
-            }
-            
-            // Fallback implementation if the original function isn't available
-            // Extract subject from the email content
+            // Extract subject and body from the email content
             let subject = '';
             let body = '';
             
@@ -2472,11 +2486,7 @@
                     /^RE:(.+?)(?:\n|$)/i,
                     /^Re:(.+?)(?:\n|$)/i,
                     /^FWD:(.+?)(?:\n|$)/i,
-                    /^Fwd:(.+?)(?:\n|$)/i,
-                    // Capture the first line if it ends with a colon and isn't a greeting
-                    /^([^:]{1,60}):\s*$/m,
-                    // Potential subject lines at the beginning of text
-                    /^([A-Za-z0-9].*?)(?:\n|$)/
+                    /^Fwd:(.+?)(?:\n|$)/i
                 ];
                 
                 // Try each pattern to extract subject
@@ -2490,22 +2500,22 @@
                         break;
                     }
                 }
-            } else {
+                
+                // If we still don't have a subject, look for the first line
+                if (!subject && body.includes('\n')) {
+                    const firstLine = body.split('\n')[0].trim();
+                    // If the first line is short and doesn't look like a greeting, it might be a subject
+                    if (firstLine.length < 80 && 
+                        !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
+                        subject = firstLine;
+                        console.log("First line as subject:", subject);
+                        body = body.substring(firstLine.length).trim();
+                    }
+                }
+            } else if (emailContent && typeof emailContent === 'object') {
                 // It's an object
                 subject = emailContent.subject || '';
                 body = emailContent.body || '';
-            }
-            
-            // If we still don't have a subject from a string input, look for the first line
-            if (typeof emailContent === 'string' && !subject && body.includes('\n')) {
-                const firstLine = body.split('\n')[0].trim();
-                // If the first line is short and doesn't look like a greeting, it might be a subject
-                if (firstLine.length < 80 && 
-                    !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
-                    subject = firstLine;
-                    console.log("First line as subject:", subject);
-                    body = body.substring(firstLine.length).trim();
-                }
             }
             
             // Open compose modal
@@ -2518,17 +2528,130 @@
             const subjectField = document.getElementById('compose-subject');
             const bodyField = document.getElementById('compose-body');
             
-            if (subjectField && subject) subjectField.value = subject;
+            if (subjectField) subjectField.value = subject;
             
             if (bodyField) {
                 if (bodyField.getAttribute('contenteditable') === 'true') {
-                    bodyField.innerHTML = body;
+                    // Convert newlines to HTML breaks before setting innerHTML
+                    const formattedBody = body.replace(/\n/g, '<br>');
+                    bodyField.innerHTML = formattedBody;
+                    console.log("Set body content (HTML):", formattedBody.substring(0, 50) + "...");
                 } else {
                     bodyField.value = body;
+                    console.log("Set body content (value):", body.substring(0, 50) + "...");
                 }
                 
                 // Update hidden textarea
-                updateHiddenTextarea();
+                const hiddenTextarea = document.getElementById('compose-body-hidden');
+                if (hiddenTextarea) {
+                    // The hidden textarea should contain the HTML version for contenteditable
+                    hiddenTextarea.value = bodyField.innerHTML;
+                }
+            }
+            
+            // Focus on the subject field if empty, otherwise the body
+            if (subjectField && !subject) {
+                subjectField.focus();
+            } else if (bodyField) {
+                bodyField.focus();
+            }
+        };
+        
+        // Add implementation for moveLastAIMessageToCompose
+        window.moveLastAIMessageToCompose = function(messages) {
+            // Extract the last AI message
+            const lastAIMessage = messages.filter(m => m.role === 'assistant').pop();
+            
+            if (lastAIMessage) {
+                // Use the existing moveEmailToCompose function
+                moveEmailToCompose(lastAIMessage.content);
+                return true; // Return success
+            }
+            
+            return false; // Return failure if no AI message found
+        };
+        
+        // Add debug tools that can be accessed from browser console
+        window.debugEmail = {
+            testMoveEmail: function(text) {
+                console.log("Testing moveEmailToCompose with:", text.substring(0, 100) + "...");
+                return moveEmailToCompose(text);
+            },
+            testWithNewlines: function() {
+                // Test with a sample email containing many newlines
+                const sampleEmail = `Subject: Test Email with Newlines
+
+Dear User,
+
+This is a test email body.
+This is a second line.
+
+This is a new paragraph.
+- This is a list item
+- This is another list item
+
+Best regards,
+Test User`;
+                console.log("Testing with sample email containing newlines");
+                return moveEmailToCompose(sampleEmail);
+            },
+            inspectComposeBody: function() {
+                const bodyField = document.getElementById('compose-body');
+                const hiddenTextarea = document.getElementById('compose-body-hidden');
+                
+                console.log("compose-body HTML:", bodyField.innerHTML);
+                console.log("compose-body outerHTML:", bodyField.outerHTML);
+                console.log("compose-body textContent:", bodyField.textContent);
+                console.log("Hidden textarea value:", hiddenTextarea.value);
+                
+                // Check if innerHTML contains <br> tags
+                const hasBrTags = bodyField.innerHTML.includes('<br>');
+                console.log("Contains <br> tags:", hasBrTags);
+                
+                return {
+                    innerHTML: bodyField.innerHTML,
+                    textContent: bodyField.textContent,
+                    hiddenValue: hiddenTextarea.value,
+                    hasBrTags: hasBrTags
+                };
+            },
+            fixLineBreaks: function() {
+                const bodyField = document.getElementById('compose-body');
+                // Get text content, replace newlines with <br> and set it back
+                const text = bodyField.textContent;
+                const withBreaks = text.replace(/\n/g, '<br>');
+                bodyField.innerHTML = withBreaks;
+                console.log("Applied line break fix");
+                return withBreaks;
+            },
+            checkHistory: function() {
+                console.log("Current conversation history:", conversationHistory);
+                return conversationHistory;
+            },
+            getLastAIMessage: function() {
+                const lastAI = conversationHistory
+                    .filter(m => m.role === 'assistant')
+                    .pop();
+                console.log("Last AI message:", lastAI);
+                return lastAI;
+            },
+            moveLastAI: function() {
+                return moveLastAIMessageToCompose(conversationHistory);
+            },
+            testComposeFields: function() {
+                const fields = {
+                    subject: document.getElementById('compose-subject'),
+                    body: document.getElementById('compose-body'),
+                    hidden: document.getElementById('compose-body-hidden')
+                };
+                console.log("Compose fields:", fields);
+                
+                if (fields.body) {
+                    console.log("Body is contenteditable:", fields.body.getAttribute('contenteditable') === 'true');
+                    console.log("Current content:", fields.body.innerHTML || fields.body.value);
+                }
+                
+                return fields;
             }
         };
     </script>
