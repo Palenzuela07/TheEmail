@@ -46,7 +46,19 @@ function populateComposeFields(content, to = '', subject = '') {
     
     if (toField && to) toField.value = to;
     if (subjectField && subject) subjectField.value = subject;
-    if (bodyField && content) bodyField.value = content;
+    
+    if (bodyField && content) {
+        if (bodyField.getAttribute('contenteditable') === 'true') {
+            bodyField.innerHTML = content;
+            // Also update the hidden textarea if it exists
+            const hiddenBody = document.getElementById('compose-body-hidden');
+            if (hiddenBody) hiddenBody.value = content;
+        } else {
+            bodyField.value = content;
+        }
+    }
+    
+    console.log("Fields populated. To:", to, "Subject:", subject, "Body length:", content?.length || 0);
 }
 
 // Update existing functions to use the new consolidated moveToCompose
@@ -1300,7 +1312,36 @@ async function sendEmail() {
     try {
         const to = document.getElementById('compose-to').value;
         const subject = document.getElementById('compose-subject').value;
-        const body = document.getElementById('compose-body').value;
+        
+        // Get content from contenteditable div or hidden textarea
+        let body;
+        const bodyField = document.getElementById('compose-body');
+        
+        if (bodyField.getAttribute('contenteditable') === 'true') {
+            // Get from contenteditable div
+            body = bodyField.innerHTML;
+            
+            // Also check hidden textarea as a backup
+            const hiddenBody = document.getElementById('compose-body-hidden');
+            if (!body && hiddenBody && hiddenBody.value) {
+                body = hiddenBody.value;
+            }
+        } else {
+            // Get from regular textarea
+            body = bodyField.value;
+        }
+        
+        // Convert HTML to plain text for email
+        if (body.includes('<') && body.includes('>')) {
+            // Simple HTML to text conversion
+            body = body.replace(/<div>/gi, '\n')
+                      .replace(/<\/div>/gi, '')
+                      .replace(/<br\s*\/?>/gi, '\n')
+                      .replace(/<[^>]+>/g, '')
+                      .replace(/&nbsp;/g, ' ');
+        }
+
+        console.log('Body content:', body);
 
         if (!to || !subject || !body) {
             alert('Please fill in all fields');
