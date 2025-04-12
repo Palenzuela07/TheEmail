@@ -2446,40 +2446,58 @@
         // Modify moveToCompose to use our hidden textarea instead
         const originalMoveEmailToCompose = moveEmailToCompose;
         window.moveEmailToCompose = function(emailContent) {
-            console.log("moveEmailToCompose called with:", emailContent);
-            // Extract subject from the email content
-            let subject = '';
-            let body = emailContent;
-            
-            // Try to extract subject line
-            const subjectPatterns = [
-                /Subject:(.+?)(?:\n|$)/i,
-                /Subject line:(.+?)(?:\n|$)/i,
-                /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
-                /^RE:(.+?)(?:\n|$)/i,
-                /^Re:(.+?)(?:\n|$)/i,
-                /^FWD:(.+?)(?:\n|$)/i,
-                /^Fwd:(.+?)(?:\n|$)/i,
-                // Capture the first line if it ends with a colon and isn't a greeting
-                /^([^:]{1,60}):\s*$/m,
-                // Potential subject lines at the beginning of text
-                /^([A-Za-z0-9].*?)(?:\n|$)/
-            ];
-            
-            // Try each pattern to extract subject
-            for (const pattern of subjectPatterns) {
-                const match = emailContent.match(pattern);
-                if (match && match[1]) {
-                    subject = match[1].trim();
-                    console.log("Subject extracted:", subject);
-                    // Remove the subject line from the body
-                    body = body.replace(pattern, '').trim();
-                    break;
-                }
+            console.log("moveEmailToCompose called with:", 
+                typeof emailContent === 'string' 
+                ? emailContent.substring(0, 50) + "..." 
+                : emailContent);
+                
+            // Use the implementation from main.js
+            if (originalMoveEmailToCompose) {
+                return originalMoveEmailToCompose(emailContent);
             }
             
-            // If we still don't have a subject, look for the first line that might be a subject
-            if (!subject && body.includes('\n')) {
+            // Fallback implementation if the original function isn't available
+            // Extract subject from the email content
+            let subject = '';
+            let body = '';
+            
+            if (typeof emailContent === 'string') {
+                body = emailContent;
+                
+                // Try to extract subject line
+                const subjectPatterns = [
+                    /Subject:(.+?)(?:\n|$)/i,
+                    /Subject line:(.+?)(?:\n|$)/i,
+                    /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
+                    /^RE:(.+?)(?:\n|$)/i,
+                    /^Re:(.+?)(?:\n|$)/i,
+                    /^FWD:(.+?)(?:\n|$)/i,
+                    /^Fwd:(.+?)(?:\n|$)/i,
+                    // Capture the first line if it ends with a colon and isn't a greeting
+                    /^([^:]{1,60}):\s*$/m,
+                    // Potential subject lines at the beginning of text
+                    /^([A-Za-z0-9].*?)(?:\n|$)/
+                ];
+                
+                // Try each pattern to extract subject
+                for (const pattern of subjectPatterns) {
+                    const match = emailContent.match(pattern);
+                    if (match && match[1]) {
+                        subject = match[1].trim();
+                        console.log("Subject extracted:", subject);
+                        // Remove the subject line from the body
+                        body = body.replace(pattern, '').trim();
+                        break;
+                    }
+                }
+            } else {
+                // It's an object
+                subject = emailContent.subject || '';
+                body = emailContent.body || '';
+            }
+            
+            // If we still don't have a subject from a string input, look for the first line
+            if (typeof emailContent === 'string' && !subject && body.includes('\n')) {
                 const firstLine = body.split('\n')[0].trim();
                 // If the first line is short and doesn't look like a greeting, it might be a subject
                 if (firstLine.length < 80 && 
@@ -2490,23 +2508,28 @@
                 }
             }
             
-            // Get the contenteditable div
-            const editableDiv = document.getElementById('compose-body');
+            // Open compose modal
+            const modal = document.getElementById('compose-modal');
+            modal.style.display = 'block';
+            document.body.classList.add('modal-open');
+            setTimeout(() => modal.classList.add('show'), 10);
+            
+            // Update fields
             const subjectField = document.getElementById('compose-subject');
+            const bodyField = document.getElementById('compose-body');
             
-            console.log("Found subject field:", !!subjectField);
+            if (subjectField && subject) subjectField.value = subject;
             
-            // Set the formatted content to the div instead of a textarea
-            editableDiv.innerHTML = body;
-            
-            // Set the subject if found
-            if (subject && subjectField) {
-                console.log("Setting subject field to:", subject);
-                subjectField.value = subject;
+            if (bodyField) {
+                if (bodyField.getAttribute('contenteditable') === 'true') {
+                    bodyField.innerHTML = body;
+                } else {
+                    bodyField.value = body;
+                }
+                
+                // Update hidden textarea
+                updateHiddenTextarea();
             }
-            
-            // Update the hidden textarea for compatibility
-            updateHiddenTextarea();
         };
     </script>
 </body>

@@ -106,19 +106,33 @@ app.post('/api/chat', async (req, res) => {
       role: 'system',
       content: `You are a helpful assistant that answers questions and generates emails instantly.
 
-KEY INSTRUCTIONS:
-1. For general questions - provide friendly, conversational responses
-2. For email requests - NEVER ask for more details, just create the email IMMEDIATELY
-3. When user says "write email to [person] about [topic]" - generate complete email right away
-4. For "write me an email to my mother, im not making it to dinner" - create a full email explaining can't make it to dinner
-5. NEVER respond with "What would you like to say" or "What details should I include"
-6. Always assume you have enough information to write the email
-7. NEVER invent reasons or explanations not mentioned by the user
-8. Only include details explicitly provided by the user
-9. Keep emails simple and factual using only the information given
-10.If someone asked for the date or time say you dont have that information
+KEY INSTRUCTIONS FOR EMAILS:
+1. For email requests - NEVER ask for more details, just create the email IMMEDIATELY
+2. When user says "write email to [person] about [topic]" - generate complete email right away
+3. All emails MUST follow this exact format:
+   - Include "Subject: [clear subject line]" at the top
+   - Add a proper greeting like "Dear [name]," or "Hello,"
+   - Write the email body with clear paragraphs
+   - End with a closing like "Best regards," or "Sincerely,"
+   - Add a signature line
+4. Never invent information not provided by the user
+5. Keep emails simple and focused on the requested topic
+6. Always generate complete, ready-to-send emails in proper format
+7. NEVER respond with "What would you like to say" or "What details should I include"
 
-Remember: The moment someone mentions writing an email, create it without asking questions.`
+For general questions, provide friendly, conversational responses.
+
+For email example:
+Subject: Meeting Request for Project Discussion
+ 
+Dear Team,
+
+I hope this email finds you well. I would like to schedule a meeting to discuss our current project status.
+
+Please let me know your availability for this week.
+
+Best regards,
+[Name]`
     };
     
     console.log(`Processing chat. History items: ${history ? history.length : 0}, Time: ${currentTime}`);

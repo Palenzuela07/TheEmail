@@ -65,13 +65,86 @@ function populateComposeFields(content, to = '', subject = '') {
 
 // Alias for backward compatibility
 function moveEmailToCompose(emailContent) {
-    // Extract subject from the email content
-    const subject = emailContent.subject || '';
-    const to = emailContent.from || '';
-    const body = emailContent.body || '';
+    DEBUG("moveEmailToCompose called", {
+        type: typeof emailContent,
+        isString: typeof emailContent === 'string',
+        contentPreview: typeof emailContent === 'string' ? 
+            emailContent.substring(0, 50) + "..." : 
+            JSON.stringify(emailContent).substring(0, 50) + "..."
+    });
     
-    // Pass all three parameters to moveToCompose
-    moveToCompose(body, to, subject);
+    try {
+        // Handle different types of input (string or object)
+        if (typeof emailContent === 'string') {
+            // It's a string (raw email content) - parse it
+            let subject = '';
+            let body = emailContent;
+            
+            // Better subject detection patterns
+            const subjectPatterns = [
+                /Subject:(.+?)(?:\n|$)/i,
+                /Subject line:(.+?)(?:\n|$)/i,
+                /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
+                /^RE:(.+?)(?:\n|$)/i,
+                /^Re:(.+?)(?:\n|$)/i,
+                /^FWD:(.+?)(?:\n|$)/i,
+                /^Fwd:(.+?)(?:\n|$)/i,
+            ];
+            
+            // Try each pattern to extract subject
+            for (const pattern of subjectPatterns) {
+                const match = emailContent.match(pattern);
+                if (match && match[1]) {
+                    subject = match[1].trim();
+                    DEBUG("Subject extracted:", subject);
+                    // Remove the subject line from the body
+                    body = body.replace(pattern, '').trim();
+                    break;
+                }
+            }
+            
+            // If we still don't have a subject, look for the first line that might be a subject
+            if (!subject && body.includes('\n')) {
+                const firstLine = body.split('\n')[0].trim();
+                // If the first line is short and doesn't look like a greeting, it might be a subject
+                if (firstLine.length < 80 && 
+                    !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
+                    subject = firstLine;
+                    DEBUG("First line as subject:", subject);
+                    body = body.substring(firstLine.length).trim();
+                }
+            }
+            
+            // If still no subject, use a default
+            if (!subject) {
+                subject = "Generated Email";
+                DEBUG("Using default subject");
+            }
+            
+            // Clean up the body (remove extra lines at beginning)
+            body = body.replace(/^\s*\n+/g, '');
+            
+            DEBUG("Moving to compose", { subject, bodyLength: body.length });
+            moveToCompose(body, '', subject);
+        } else if (emailContent && typeof emailContent === 'object') {
+            // It's an object with properties
+            const subject = emailContent.subject || '';
+            const to = emailContent.from || '';
+            const body = emailContent.body || '';
+            
+            DEBUG("Moving object to compose", { subject, to, bodyLength: body?.length || 0 });
+            // Pass all three parameters to moveToCompose
+            moveToCompose(body, to, subject);
+        } else {
+            // Invalid input
+            DEBUG("ERROR: Invalid email content", emailContent);
+            throw new Error("Invalid email content provided to moveEmailToCompose");
+        }
+    } catch (error) {
+        DEBUG("ERROR in moveEmailToCompose", error);
+        console.error("Error in moveEmailToCompose:", error);
+        throw error; // Rethrow so caller can handle
+    }
 }
 
 // Alias for backward compatibility
@@ -1014,7 +1087,12 @@ function resetAIChat() {
     console.log('AI chat has been reset');
 }
 
-// Update sendChatMessage function to add confirmation handling
+// Add DEBUG helper function at the top of the file
+function DEBUG(label, data) {
+    console.log(`%c DEBUG: ${label} `, 'background: #007bff; color: white; padding: 2px 4px; border-radius: 2px;', data);
+}
+
+// Update sendChatMessage function to improve debugging
 async function sendChatMessage() {
     const input = document.getElementById('chat-input');
     const messages = document.getElementById('chat-messages');
@@ -1023,6 +1101,12 @@ async function sendChatMessage() {
     if (!userMessage) return;
     
     try {
+        DEBUG('User message', userMessage);
+        
+        // Check if the message appears to be an email request
+        const isEmailRequest = checkIfEmailRequest(userMessage);
+        DEBUG('Is email request?', isEmailRequest);
+        
         // Add user message to UI
         messages.innerHTML += `
             <div class="chat-message user">
@@ -1046,6 +1130,11 @@ async function sendChatMessage() {
         });
 
         // Include current time in the API request
+        DEBUG('Sending chat request to server', {
+            message: userMessage, 
+            historyLength: conversationHistory.length
+        });
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -1070,6 +1159,7 @@ async function sendChatMessage() {
 
         const data = await response.json();
         const aiResponse = data.response;
+        DEBUG('AI response', aiResponse);
 
         // Add AI response to conversation history
         conversationHistory.push({
@@ -1088,8 +1178,15 @@ async function sendChatMessage() {
         `;
 
         // Check if response contains an email
-        if (containsEmailFormat(aiResponse)) {
-            console.log("Email detected in response");
+        const isEmailFormat = containsEmailFormat(aiResponse);
+        DEBUG('Is email format detected?', isEmailFormat);
+        
+        if (isEmailFormat) {
+            DEBUG("Email detected in response", {
+                firstChars: aiResponse.substring(0, 50),
+                length: aiResponse.length
+            });
+            
             // Store email content globally
             window.lastGeneratedEmail = aiResponse;
             window.awaitingEmailConfirmation = true;
@@ -1100,6 +1197,10 @@ async function sendChatMessage() {
                     Would you like me to move this email to the compose area? (Yes/No)
                 </div>
             `;
+        } else {
+            DEBUG("No email format detected", {
+                response: aiResponse.substring(0, 100) + "..."
+            });
         }
 
     } catch (error) {
@@ -1118,31 +1219,43 @@ async function sendChatMessage() {
 
 // Improve email detection function
 function containsEmailFormat(text) {
-    // Log the text being checked
-    console.log("Checking for email format:", text.substring(0, 50) + "...");
+    // Log the full text being checked for debugging
+    console.log("Checking for email format - Full text:", text);
 
     // Check for common email components - make more lenient
     const hasSubject = text.includes("Subject:") || text.includes("SUBJECT:") || 
-                      text.match(/^([A-Za-z\s]+):\s*[A-Za-z]/m) !== null;
+                      text.match(/^([A-Za-z\s]+):\s*[A-Za-z]/m) !== null ||
+                      text.match(/^(Re|RE|Fwd|FWD):/m) !== null;
     
-    // Check for greeting
+    // Check for greeting - be more permissive
     const hasGreeting = text.includes("Dear") || text.includes("Hello") || 
                        text.includes("Hi") || text.includes("Hey") || 
-                       text.includes("Greetings") || text.match(/^[A-Za-z\s,]+,/m) !== null;
+                       text.includes("Greetings") || text.match(/^[A-Za-z\s,]+,/m) !== null ||
+                       text.match(/^To whom/i) !== null || text.match(/^Good (morning|afternoon|evening)/i) !== null;
     
-    // Check for closing
+    // Check for closing - be more permissive
     const hasClosing = text.includes("Sincerely") || text.includes("Best") || 
                       text.includes("Regards") || text.includes("Thank you") || 
                       text.includes("Thanks") || text.includes("Cheers") ||
                       text.includes("Yours") || text.includes("Warm") || 
-                      text.includes("See you");
+                      text.includes("See you") || text.includes("Truly") ||
+                      text.includes("Appreciate") || text.includes("Respectfully");
     
-    console.log("Email format detection:", {hasSubject, hasGreeting, hasClosing});
+    // Additional checks for email-like structures
+    const hasMultipleLines = text.split('\n').length > 3;
+    const hasSignature = text.includes("\n\n") && text.length > 100;
     
-    // Return true if at least 2 of the 3 components are found
+    console.log("Email format detection:", {hasSubject, hasGreeting, hasClosing, hasMultipleLines, hasSignature});
+    
+    // Return true if either:
+    // 1. Has at least 2 of the 3 main components
+    // 2. Has one component and looks like an email structure
     return (hasSubject && hasGreeting) || 
            (hasSubject && hasClosing) || 
-           (hasGreeting && hasClosing);
+           (hasGreeting && hasClosing) ||
+           (hasSubject && hasMultipleLines && hasSignature) ||
+           (hasGreeting && hasMultipleLines && hasSignature) ||
+           (hasClosing && hasMultipleLines && hasSignature);
 }
 
 // Simplify handleChatKeyPress to focus on confirmation
@@ -1157,7 +1270,7 @@ function handleChatKeyPress(event) {
         
         // If awaiting confirmation for email
         if (window.awaitingEmailConfirmation === true) {
-            console.log("Processing confirmation response:", userMessage);
+            DEBUG("Processing confirmation response", userMessage);
             
             const messages = document.getElementById('chat-messages');
             
@@ -1171,20 +1284,51 @@ function handleChatKeyPress(event) {
             
             // Check if it's a confirmation
             const isConfirmation = /^(yes|yeah|yea|yep|sure|ok|okay|y|good|fine|great)/i.test(userMessage);
+            DEBUG("Is confirmation?", isConfirmation);
             
             if (isConfirmation) {
-                console.log("Confirmation received, moving to compose");
-                // Move content to compose area - we pass the raw string, our implementation will extract the subject
-                moveEmailToCompose(window.lastGeneratedEmail);
+                DEBUG("Confirmation received, moving to compose", window.lastGeneratedEmail?.substring(0, 50) + "...");
                 
-                // Show confirmation message
-                messages.innerHTML += `
-                    <div class="chat-message ai">
-                        I've moved the email to the compose area for you.
-                    </div>
-                `;
+                // Check if lastGeneratedEmail exists and is not empty
+                if (!window.lastGeneratedEmail) {
+                    DEBUG("ERROR: lastGeneratedEmail is empty or null", window.lastGeneratedEmail);
+                    
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            Sorry, I couldn't find the email content to move. Let me try generating a new email for you.
+                        </div>
+                    `;
+                    
+                    // Clear confirmation state
+                    window.awaitingEmailConfirmation = false;
+                    window.lastGeneratedEmail = null;
+                    
+                    // Continue with regular chat
+                    sendChatMessage();
+                    return;
+                }
+                
+                try {
+                    // Move content to compose area - we pass the raw string, our implementation will extract the subject
+                    moveEmailToCompose(window.lastGeneratedEmail);
+                    
+                    // Show confirmation message
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            I've moved the email to the compose area for you.
+                        </div>
+                    `;
+                } catch (error) {
+                    DEBUG("ERROR in moveEmailToCompose", error);
+                    
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            Sorry, there was an error moving the email. Please try again.
+                        </div>
+                    `;
+                }
             } else {
-                console.log("Non-confirmation received, continuing chat");
+                DEBUG("Non-confirmation received, continuing chat", userMessage);
                 // Handle as regular message
                 sendChatMessage();
             }
@@ -1832,44 +1976,20 @@ async function replyEmail(emailId) {
         // Generate AI response
         const aiResponse = await generateAIReply(emailBody);
 
-        // Replace loading message with AI response and new question
+        // Store email content globally
+        window.lastGeneratedEmail = aiResponse;
+        window.awaitingEmailConfirmation = true;
+        
+        // Replace loading message with AI response and confirmation prompt
         messages.innerHTML = `
             <div class="chat-message ai">
                 ${formatEmailContent(aiResponse)}
             </div>
-            <div class="chat-message ai">
-                Is this reply good to move to compose, or would you like me to make more changes?
+            <div class="chat-message ai confirmation-prompt" style="margin-top: 10px; color: #1a73e8; font-weight: bold;">
+                Would you like me to move this reply to the compose area? (Yes/No)
             </div>
         `;
         messages.scrollTop = messages.scrollHeight;
-
-        // Listen for user input
-        const chatInput = document.getElementById('chat-input');
-        chatInput.addEventListener('keypress', function handleUserResponse(event) {
-            if (event.key === 'Enter') {
-                const userResponse = chatInput.value.trim().toLowerCase();
-                console.log('User response:', userResponse); // Debugging log
-                chatInput.value = ''; // Clear input field
-
-                if (userResponse.includes('yes') || userResponse.includes('good') || userResponse.includes('move')) {
-                    console.log('Moving AI response to compose window'); // Debugging log
-                    moveToCompose(aiResponse);
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            Great! I've moved the reply to the compose window.
-                        </div>
-                    `;
-                } else {
-                    messages.innerHTML += `
-                        <div class="chat-message ai">
-                            Okay, let me know if you need any changes.
-                        </div>
-                    `;
-                }
-                messages.scrollTop = messages.scrollHeight;
-                chatInput.removeEventListener('keypress', handleUserResponse); // Remove listener after handling
-            }
-        });
 
     } catch (error) {
         console.error('Error preparing reply:', error);
