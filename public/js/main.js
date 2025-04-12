@@ -1,6 +1,112 @@
 // Add at the very top of the file
 let selectedEmails = new Set();
 
+// Function to reset compose window form fields
+function resetComposeWindow() {
+    const toField = document.getElementById('compose-to');
+    const subjectField = document.getElementById('compose-subject');
+    const bodyField = document.getElementById('compose-body');
+    
+    if (toField) toField.value = '';
+    if (subjectField) subjectField.value = '';
+    if (bodyField) {
+        bodyField.value = '';
+        if (bodyField.style) bodyField.style.height = 'auto';
+    }
+    
+    // Clear any reply-to data
+    if (window.replyToData) window.replyToData = null;
+}
+
+// Consolidated function to move content to compose window
+function moveToCompose(content, to = '', subject = '') {
+    // First ensure compose modal is open
+    const modal = document.getElementById('compose-modal');
+    const isModalClosed = !modal || modal.style.display === 'none';
+    
+    if (isModalClosed) {
+        // Open the compose modal first
+        openComposeModal(null);
+        
+        // Small delay to ensure modal is rendered
+        setTimeout(() => {
+            populateComposeFields(content, to, subject);
+        }, 100);
+    } else {
+        // Modal already open, populate immediately
+        populateComposeFields(content, to, subject);
+    }
+}
+
+// Helper function to actually populate the fields
+function populateComposeFields(content, to = '', subject = '') {
+    // Get compose fields
+    const toField = document.getElementById('compose-to');
+    const subjectField = document.getElementById('compose-subject');
+    const bodyField = document.getElementById('compose-body');
+    
+    // Check if fields exist before setting values
+    if (!toField || !subjectField || !bodyField) {
+        console.error('Compose fields not found');
+        return false;
+    }
+    
+    // If content appears to be a full email, extract parts
+    if (typeof content === 'string' && content.includes('Subject:')) {
+        // Extract subject if present and not already specified
+        if (!subject) {
+            const subjectMatch = content.match(/Subject: (.*?)(?:\n|$)/);
+            if (subjectMatch) {
+                subject = subjectMatch[1].trim();
+                // Remove the Subject line from the content
+                content = content.replace(/Subject:.*?\n/, '');
+            }
+        }
+        
+        // Extract To if present and not already specified
+        if (!to) {
+            const toMatch = content.match(/To: (.*?)(?:\n|$)/);
+            if (toMatch) {
+                to = toMatch[1].trim();
+                // Remove the To line from the content
+                content = content.replace(/To:.*?\n/, '');
+            }
+        }
+    }
+    
+    // Set values to fields
+    if (to) toField.value = to;
+    if (subject) subjectField.value = subject;
+    if (content) bodyField.value = content;
+    
+    // Auto-resize body field if needed
+    if (bodyField.style && bodyField.scrollHeight > bodyField.clientHeight) {
+        bodyField.style.height = bodyField.scrollHeight + 'px';
+    }
+    
+    return true;
+}
+
+// Update existing functions to use the new consolidated moveToCompose
+
+// Alias for backward compatibility
+function moveEmailToCompose(emailContent) {
+    return moveToCompose(emailContent);
+}
+
+// Alias for backward compatibility
+function moveLastAIMessageToCompose(messages) {
+    // Find the last AI message with email content
+    let emailContent = '';
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'assistant' && containsEmailFormat(messages[i].content)) {
+            emailContent = messages[i].content;
+            break;
+        }
+    }
+    return moveToCompose(emailContent);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Add styles for email formatting
     const style = document.createElement('style');
@@ -1129,28 +1235,11 @@ function findEmailInHistory(history) {
     return null;
 }
 
-// Function to move the email to the compose area
-function moveEmailToCompose(emailContent) {
-    // Extract subject if present
-    let subject = '';
-    const subjectMatch = emailContent.match(/Subject: (.*?)(?:\n|$)/);
-    if (subjectMatch) {
-        subject = subjectMatch[1].trim();
-    }
-    
-    // Remove the Subject line from the email body
-    let bodyContent = emailContent;
-    if (subjectMatch) {
-        bodyContent = bodyContent.replace(/Subject:.*?\n/, '');
-    }
-    
-    // Set the values
-    document.getElementById('compose-subject').value = subject;
-    document.getElementById('compose-body').value = bodyContent;
-}
-
 // Update the openComposeModal function to properly set the title
 function openComposeModal(replyTo = null) {
+    // Reset the form fields first
+    resetComposeWindow();
+    
     console.log('Opening compose modal', replyTo ? 'as reply' : 'as new message');
     
     const modal = document.getElementById('compose-modal');
@@ -1199,19 +1288,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Update closeComposeModal to remove the event listener
 function closeComposeModal() {
-    const modal = document.getElementById('compose-modal');
-    const chatInput = document.getElementById('chat-input');
-    chatInput.removeEventListener('keypress', handleChatKeyPress);
+    document.getElementById('compose-modal').style.display = 'none';
+    document.body.classList.remove('modal-open');
     
-    // Clear chat history when compose window is closed
-    localStorage.removeItem('chatHistory');
-    conversationHistory = [{
-        role: "system",
-        content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
-    }];
-    
-    modal.classList.remove('show');
-    setTimeout(() => modal.style.display = 'none', 300);
+    // Reset the form after closing
+    resetComposeWindow();
 }
 
 // Function to send an email
@@ -1542,41 +1623,6 @@ function handleConfirmedAction(action, messagesContainer) {
         }
     }
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-function moveLastAIMessageToCompose(messages) {
-    // Find the last AI message that looks like an email
-    let emailContent = null;
-    for (let i = messages.length - 1; i >= 0; i--) {
-        const message = messages[i];
-        if (message.role === 'assistant' && 
-            message.content.includes('Subject:') && 
-            !message.content.includes('Would you like me to') &&
-            !message.content.includes('I\'ve moved')) {
-            emailContent = message.content;
-            break;
-        }
-    }
-
-    if (!emailContent) {
-        console.log('No email content found in messages');
-        return false;
-    }
-
-    // Extract subject and body
-    const subjectMatch = emailContent.match(/Subject: (.*?)(?:\n|$)/);
-    const subject = subjectMatch ? subjectMatch[1].trim() : '';
-
-    // Get everything after "Subject: " line
-    const bodyStartIndex = emailContent.indexOf('\n', emailContent.indexOf('Subject:'));
-    const body = bodyStartIndex !== -1 ? emailContent.substring(bodyStartIndex).trim() : emailContent;
-
-    // Set the values in the compose modal
-    document.getElementById('compose-subject').value = subject;
-    document.getElementById('compose-body').value = body;
-
-    console.log('Email content moved to compose area:', { subject, body });
-    return true;
 }
 
 async function performSearch() {
