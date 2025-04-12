@@ -10,12 +10,24 @@ function resetComposeWindow() {
     if (toField) toField.value = '';
     if (subjectField) subjectField.value = '';
     if (bodyField) {
-        bodyField.value = '';
+        // Handle contenteditable div
+        if (bodyField.getAttribute('contenteditable') === 'true') {
+            bodyField.innerHTML = '';
+        } else {
+            bodyField.value = '';
+        }
+        
         if (bodyField.style) bodyField.style.height = 'auto';
     }
     
+    // Also clear the hidden textarea if it exists
+    const hiddenBody = document.getElementById('compose-body-hidden');
+    if (hiddenBody) hiddenBody.value = '';
+    
     // Clear any reply-to data
     if (window.replyToData) window.replyToData = null;
+    
+    console.log('Compose window has been reset');
 }
 
 // Consolidated function to move content to compose window
@@ -948,85 +960,36 @@ function deleteEmail(emailId) {
 // Function to reset AI chat
 function resetAIChat() {
     const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
     
-    // Try to load previous conversation history
-    const savedHistory = localStorage.getItem('chatHistory');
+    // Reset to default welcome message
+    chatMessages.innerHTML = `
+        <div class="chat-message ai">
+            How can I help you with your emails today?
+        </div>
+    `;
     
-    if (savedHistory) {
-        try {
-            // Limit history to last 10 messages for performance
-            conversationHistory = JSON.parse(savedHistory);
-            
-            // If history is too long, keep system prompt and last 10 exchanges
-            if (conversationHistory.length > 21) {
-                const systemPrompt = conversationHistory[0];
-                conversationHistory = [
-                    systemPrompt,
-                    ...conversationHistory.slice(conversationHistory.length - 20)
-                ];
-            }
-            
-            // Rebuild UI from history (last 6 messages for UI clarity)
-            const displayMessages = conversationHistory.slice(Math.max(0, conversationHistory.length - 6));
-            
-            chatMessages.innerHTML = '';
-            displayMessages.forEach(msg => {
-                if (msg.role === 'user') {
-                    chatMessages.innerHTML += `
-                        <div class="chat-message user">${msg.content}</div>
-                    `;
-                } else if (msg.role === 'assistant') {
-                    chatMessages.innerHTML += `
-                        <div class="chat-message ai">${msg.content}</div>
-                    `;
-                }
-            });
-            
-            // If no visible messages (only system prompt), add welcome message
-            if (displayMessages.length <= 1) {
-                chatMessages.innerHTML = `
-                    <div class="chat-message ai">
-                        How can I help you with your emails today?
-                    </div>
-                `;
-            }
-        } catch (e) {
-            console.error('Error loading chat history:', e);
-            // Fallback to default welcome message
-            chatMessages.innerHTML = `
-                <div class="chat-message ai">
-                    How can I help you with your emails today?
-                </div>
-            `;
-            // Reset conversation history to just system prompt
-            conversationHistory = [{
-                role: "system",
-                content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
-            }];
-        }
-    } else {
-        // No history found, set default welcome message
-        chatMessages.innerHTML = `
-            <div class="chat-message ai">
-                How can I help you with your emails today?
-            </div>
-        `;
-        // Initialize conversation history with welcome message
-        conversationHistory = [
-            {
-                role: "system",
-                content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
-            },
-            {
-                role: "assistant",
-                content: "How can I help you with your emails today?"
-            }
-        ];
-    }
-
-    // Add this at the end of resetAIChat function
+    // Reset any state variables
+    window.awaitingEmailConfirmation = false;
+    window.lastGeneratedEmail = null;
+    
+    // Clear chat input if it exists
     const chatInput = document.getElementById('chat-input');
-    chatInput.addEventListener('keypress', handleChatKeyPress);
+    if (chatInput) chatInput.value = '';
+    
+    // Initialize conversation history with system message
+    conversationHistory = [
+        {
+            role: "system",
+            content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+        },
+        {
+            role: "assistant",
+            content: "How can I help you with your emails today?"
+        }
+    ];
+    
+    console.log('AI chat has been reset');
 }
 
 // Update sendChatMessage function to add confirmation handling
@@ -1267,17 +1230,36 @@ function openComposeModal(replyTo = null) {
     
     if (toField) toField.value = replyTo?.from || '';
     if (subjectField) subjectField.value = replyTo?.subject ? `Re: ${replyTo.subject}` : '';
-    if (bodyField) bodyField.value = replyTo ? `
+    if (bodyField) {
+        if (bodyField.getAttribute('contenteditable') === 'true') {
+            bodyField.innerHTML = replyTo ? `
 
 On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
 ${replyTo.body ? replyTo.body.split('\n').map(line => '> ' + line).join('\n') : ''}` : '';
+        } else {
+            bodyField.value = replyTo ? `
+
+On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
+${replyTo.body ? replyTo.body.split('\n').map(line => '> ' + line).join('\n') : ''}` : '';
+        }
+    }
 
     // Show the modal
     modal.style.display = 'block';
+    document.body.classList.add('modal-open');
     setTimeout(() => modal.classList.add('show'), 10);
     
     // Reset AI chat if needed
     resetAIChat();
+    
+    // Setup event handlers for chat input
+    const chatInput = document.getElementById('chat-input');
+    if (chatInput) {
+        // Remove any existing event listeners to prevent duplicates
+        chatInput.removeEventListener('keypress', handleChatKeyPress);
+        // Add the event listener
+        chatInput.addEventListener('keypress', handleChatKeyPress);
+    }
 }
 
 // Make sure the compose button explicitly calls with null parameter
@@ -1292,13 +1274,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Update closeComposeModal to remove the event listener
+// Update closeComposeModal to properly close and reset the modal
 function closeComposeModal() {
-    document.getElementById('compose-modal').style.display = 'none';
+    const modal = document.getElementById('compose-modal');
+    
+    // Hide the modal
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    }
+    
     document.body.classList.remove('modal-open');
     
     // Reset the form after closing
     resetComposeWindow();
+    
+    // Clear any chat history in the AI assistant area
+    resetAIChat();
+    
+    console.log('Compose modal closed and reset');
 }
 
 // Function to send an email
