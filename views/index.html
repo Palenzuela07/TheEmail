@@ -933,7 +933,7 @@
         }
 
         .ai-suggestions {
-            width: 40%;
+            width: 50%;
             padding: 16px;
             display: flex;
             flex-direction: column;
@@ -943,7 +943,7 @@
         }
 
         .compose-area {
-            width: 60%;
+            width: 50%;
             padding: 16px 16px 16px 32px;
             position: relative;
             height: 100%;
@@ -951,13 +951,13 @@
             display: flex;
             flex-direction: column;
         }
-
+        
         .compose-area::before {
             content: '';
             position: absolute;
             left: 0;
-            top: 0;
-            bottom: 0;
+            top: 20px;
+            bottom: 20px;
             width: 1px;
             background-color: #dadce0;
             z-index: 2;
@@ -965,8 +965,18 @@
 
         .ai-suggestions h3 {
             margin: 0;
-            margin-bottom: 4px;
+            margin-bottom: 12px;
             padding-left: 16px;
+            color: #1a73e8;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .ai-suggestions h3::before {
+            content: '🤖';
+            font-size: 18px;
         }
 
         .suggestion-box {
@@ -1062,68 +1072,71 @@
             border-radius: 4px;
             margin-bottom: 60px;
         }
-
+        
         .chat-message {
             margin-bottom: 12px;
-            padding: 8px 12px;
-            border-radius: 12px;
-            max-width: 85%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            max-width: 90%;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.4;
         }
-
+        
         .chat-message.user {
-            background: #e8f0fe;
-            color: #1a73e8;
+            background-color: #e8f0fe;
             margin-left: auto;
-            border-radius: 12px 12px 0 12px;
+            border-bottom-right-radius: 2px;
+            color: #174ea6;
         }
-
+        
         .chat-message.ai {
-            background: #f8f9fa;
-            border: none;
-            border-radius: 12px 12px 12px 0;
+            background-color: #f1f3f4;
+            margin-right: auto;
+            border-bottom-left-radius: 2px;
+            color: #202124;
         }
 
         .chat-input-area {
             display: flex;
             gap: 8px;
             align-items: center;
-            padding: 8px 16px;
+            padding: 12px 16px;
             background: #f8f9fa;
             box-sizing: border-box;
             position: absolute;
             bottom: 0;
-            left: 16px;
-            right: 16px;
+            left: 0;
+            right: 0;
             border-top: 1px solid #dadce0;
-            width: calc(100% - 32px);
+            width: 100%;
         }
-
+        
         #chat-input {
             flex: 1;
-            height: 32px;
+            height: 36px;
             resize: none;
-            padding: 6px 8px;
+            padding: 8px 12px;
             border: 1px solid #dadce0;
-            border-radius: 4px;
+            border-radius: 18px;
             font-size: 14px;
             box-sizing: border-box;
-            max-width: calc(100% - 76px);
+            width: calc(100% - 60px);
         }
-
+        
         .ai-send-btn {
-            width: 60px;
-            padding: 6px 12px;
-            background: #1a73e8;
+            background-color: #1a73e8;
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 18px;
+            padding: 8px 16px;
             cursor: pointer;
-            height: 32px;
-            box-sizing: border-box;
+            font-size: 14px;
+            transition: background-color 0.2s;
         }
-
+        
         .ai-send-btn:hover {
-            background: #1557b0;
+            background-color: #1765cc;
         }
 
         .ai-button-group {
@@ -1249,12 +1262,13 @@
             position: relative;
             height: calc(100% - 30px);
             border: 2px solid #1a73e8;
-            border-radius: 4px;
+            border-radius: 8px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             width: 100%;
             box-sizing: border-box;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .chat-messages {
@@ -1265,12 +1279,36 @@
             border-radius: 4px;
             margin-bottom: 60px;
         }
+        
+        .chat-message {
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            max-width: 90%;
+            word-wrap: break-word;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .chat-message.user {
+            background-color: #e8f0fe;
+            margin-left: auto;
+            border-bottom-right-radius: 2px;
+            color: #174ea6;
+        }
+        
+        .chat-message.ai {
+            background-color: #f1f3f4;
+            margin-right: auto;
+            border-bottom-left-radius: 2px;
+            color: #202124;
+        }
 
         .chat-input-area {
             display: flex;
             gap: 8px;
             align-items: center;
-            padding: 8px 16px;
+            padding: 12px 16px;
             background: #f8f9fa;
             box-sizing: border-box;
             position: absolute;
@@ -1283,14 +1321,29 @@
 
         #chat-input {
             flex: 1;
-            height: 32px;
+            height: 36px;
             resize: none;
-            padding: 6px 8px;
+            padding: 8px 12px;
             border: 1px solid #dadce0;
-            border-radius: 4px;
+            border-radius: 18px;
             font-size: 14px;
             box-sizing: border-box;
-            width: calc(100% - 76px);
+            width: calc(100% - 60px);
+        }
+        
+        .ai-send-btn {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 18px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        
+        .ai-send-btn:hover {
+            background-color: #1765cc;
         }
 
         /* Add these styles */
@@ -1440,6 +1493,298 @@
         .sub-nav-item {
             position: relative;
             transition: all 0.2s ease-in-out;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+        /* CATEGORY TABS STYLING - CONSOLIDATED AND ENHANCED */
+        /* Base styling for all tabs */
+        .email-tab {
+            flex: 1;
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-left: 60px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        /* Active tab styling with prominent blue underline */
+        .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* The blue underline for active tab */
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
+        }
+
+        @keyframes underlineAppear {
+            from { opacity: 0; transform: scaleX(0.7); }
+            to { opacity: 1; transform: scaleX(1); }
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Sidebar active items styling */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+            padding-left: 32px;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+        /* CATEGORY TABS STYLING - CONSOLIDATED AND ENHANCED */
+        /* Base styling for all tabs */
+        .email-tab {
+            flex: 1;
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-left: 60px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        /* Active tab styling with prominent blue underline */
+        .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* The blue underline for active tab */
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
+        }
+
+        @keyframes underlineAppear {
+            from { opacity: 0; transform: scaleX(0.7); }
+            to { opacity: 1; transform: scaleX(1); }
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Sidebar active items styling */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+            padding-left: 32px;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+        /* CATEGORY TABS STYLING - CONSOLIDATED AND ENHANCED */
+        /* Base styling for all tabs */
+        .email-tab {
+            flex: 1;
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-left: 60px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        /* Active tab styling with prominent blue underline */
+        .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* The blue underline for active tab */
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
+        }
+
+        @keyframes underlineAppear {
+            from { opacity: 0; transform: scaleX(0.7); }
+            to { opacity: 1; transform: scaleX(1); }
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Sidebar active items styling */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+            padding-left: 32px;
+        }
+
+        .sub-nav-item.active {
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 28px !important;
+        }
+        /* CATEGORY TABS STYLING - CONSOLIDATED AND ENHANCED */
+        /* Base styling for all tabs */
+        .email-tab {
+            flex: 1;
+            padding: 16px 0;
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+            cursor: pointer;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-left: 60px;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .email-tab:hover {
+            background: #f1f3f4;
+            color: #202124;
+        }
+
+        /* Active tab styling with prominent blue underline */
+        .email-tab.active {
+            color: #1a73e8 !important;
+            font-weight: 600 !important;
+            background-color: #e8f0fe !important;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* The blue underline for active tab */
+        .email-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: #1a73e8;
+            display: block;
+            border-radius: 2px 2px 0 0;
+            box-shadow: 0 1px 3px rgba(26, 115, 232, 0.5);
+            animation: underlineAppear 0.3s ease-in-out forwards;
+        }
+
+        @keyframes underlineAppear {
+            from { opacity: 0; transform: scaleX(0.7); }
+            to { opacity: 1; transform: scaleX(1); }
+        }
+
+        /* Make sure icons and text in active tab are blue */
+        .email-tab.active .tab-icon,
+        .email-tab.active span {
+            color: #1a73e8 !important;
+        }
+
+        /* Sidebar active items styling */
+        .sub-nav-item {
+            position: relative;
+            transition: all 0.2s ease-in-out;
+            padding-left: 32px;
         }
 
         .sub-nav-item.active {
