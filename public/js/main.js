@@ -450,6 +450,9 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
 
         console.log(`Fetching emails for filter: ${filter}, page: ${page}, query: ${query}`);
 
+        // Show immediate loading indicator
+        document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Loading emails...</div>';
+
         const response = await gapi.client.gmail.users.messages.list({
             userId: 'me',
             q: query,
@@ -470,13 +473,14 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
                 sessionStorage.setItem(`pageToken_${filter}_${page}`, response.result.nextPageToken);
             }
 
-            // Fetch full details for each message
+            // Fetch metadata for each message instead of full details for better performance
             const messages = await Promise.all(
                 response.result.messages.map(async (message) => {
                     const fullMessage = await gapi.client.gmail.users.messages.get({
                         userId: 'me',
                         id: message.id,
-                        format: 'full'
+                        format: 'metadata',
+                        metadataHeaders: ['From', 'Subject', 'Date']
                     });
                     return fullMessage.result;
                 })
@@ -606,30 +610,36 @@ function displayEmails(emails) {
             emailItem.setAttribute('data-id', email.id);
             
             // Check if email is read
-            const isRead = !email.labelIds.includes('UNREAD');
+            const isRead = !email.labelIds || !email.labelIds.includes('UNREAD');
             if (isRead) {
                 emailItem.classList.add('email-read');
             }
             
             // Check if email is starred
-            const isStarred = email.labelIds.includes('STARRED');
+            const isStarred = email.labelIds && email.labelIds.includes('STARRED');
             
-            // Safely get headers
-            const fromHeader = email.payload.headers ? email.payload.headers.find(h => h.name === 'From') : null;
-            const subjectHeader = email.payload.headers ? email.payload.headers.find(h => h.name === 'Subject') : null;
-            const dateHeader = email.payload.headers ? email.payload.headers.find(h => h.name === 'Date') : null;
+            // Get headers from the metadata
+            let from = 'Unknown';
+            let subject = 'No Subject';
+            let date = '';
             
-            const from = fromHeader ? fromHeader.value : 'Unknown';
-            const subject = subjectHeader ? subjectHeader.value : 'No Subject';
-            const date = dateHeader ? dateHeader.value : '';
+            if (email.payload && email.payload.headers) {
+                const fromHeader = email.payload.headers.find(h => h.name === 'From');
+                const subjectHeader = email.payload.headers.find(h => h.name === 'Subject');
+                const dateHeader = email.payload.headers.find(h => h.name === 'Date');
+                
+                from = fromHeader ? fromHeader.value : 'Unknown';
+                subject = subjectHeader ? subjectHeader.value : 'No Subject';
+                date = dateHeader ? dateHeader.value : '';
+            }
             
             emailItem.innerHTML = `
                 <input type="checkbox" class="email-checkbox" onchange="handleEmailSelection('${email.id}', this)">
                 <div class="email-star" onclick="event.stopPropagation(); toggleStar('${email.id}', ${isStarred})" style="cursor: pointer;">
                     ${isStarred ? '<span class="gold-star">⭐</span>' : '☆'}
                 </div>
-                <div class="email-important" onclick="event.stopPropagation(); toggleImportant('${email.id}', ${email.labelIds.includes('IMPORTANT')})" style="cursor: pointer;">
-                    ${email.labelIds.includes('IMPORTANT') ? '❗' : '❕'}
+                <div class="email-important" onclick="event.stopPropagation(); toggleImportant('${email.id}', ${email.labelIds && email.labelIds.includes('IMPORTANT')})" style="cursor: pointer;">
+                    ${email.labelIds && email.labelIds.includes('IMPORTANT') ? '❗' : '❕'}
                 </div>
                 <div class="email-content" onclick="openEmail('${email.id}')">
                     <p class="email-sender">${formatSender(from)}</p>

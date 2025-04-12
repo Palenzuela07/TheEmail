@@ -864,6 +864,8 @@
             flex: 1;
             padding: 16px;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
         .modal-footer {
@@ -927,9 +929,10 @@
         .compose-split-view {
             display: flex;
             gap: 0;
-            height: 100%;
+            height: calc(100% - 80px); /* Account for input fields at top */
             position: relative;
             background: white;
+            margin-top: 6px; /* Reduced from 10px to 6px */
         }
 
         .ai-suggestions {
@@ -950,6 +953,7 @@
             background: white;
             display: flex;
             flex-direction: column;
+            box-sizing: border-box;
         }
         
         .compose-area::before {
@@ -999,7 +1003,8 @@
 
         #compose-body {
             flex: 1;
-            min-height: 200px;
+            min-height: 350px;
+            height: calc(100% - 45px); /* Subtract toolbar height */
             background-color: white;
             border-radius: 4px;
             font-family: Arial, sans-serif;
@@ -1008,13 +1013,11 @@
             border: 1px solid #ccc;
             padding: 8px;
             overflow-y: auto;
+            box-sizing: border-box;
+            margin-bottom: 0;
         }
 
-        .modal {
-            width: 800px;
-            height: 600px;
-        }
-
+        /* AI prompting styles */
         #ai-prompt {
             height: 120px;
             resize: none;
@@ -1260,7 +1263,7 @@
 
         #ai-chat-area {
             position: relative;
-            height: calc(100% - 30px);
+            height: calc(100% - 35px); /* Subtract header height */
             border: 2px solid #1a73e8;
             border-radius: 8px;
             overflow: hidden;
@@ -1270,7 +1273,18 @@
             box-sizing: border-box;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
-
+        
+        .ai-suggestions {
+            width: 50%;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            height: 100%;
+            background: white;
+            box-sizing: border-box;
+        }
+        
         .chat-messages {
             flex: 1;
             overflow-y: auto;
@@ -1318,7 +1332,7 @@
             border-top: 1px solid #dadce0;
             width: 100%;
         }
-
+        
         #chat-input {
             flex: 1;
             height: 36px;
@@ -2159,26 +2173,35 @@
         }
 
         .editor-toolbar {
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             display: flex;
-            gap: 8px;
-            padding: 6px;
+            gap: 4px;
+            padding: 4px 6px; /* Reduced padding */
             background-color: #f8f9fa;
             border: 1px solid #dadce0;
             border-radius: 4px;
+            height: 34px; /* Reduced height */
+            box-sizing: border-box;
+            flex-wrap: nowrap;
+            overflow-x: hidden;
+            width: calc(100% - 24px); /* Match the width of input fields */
+            margin-left: 12px; /* Match the left margin of input fields */
+            margin-right: 12px; /* Match the right margin of input fields */
         }
         
         .editor-btn {
             background-color: #fff;
             border: 1px solid #dadce0;
             border-radius: 4px;
-            padding: 6px 12px;
+            padding: 3px 6px; /* Reduced padding */
             cursor: pointer;
             transition: all 0.2s;
-            min-width: 36px;
+            min-width: 26px; /* Reduced width */
+            max-width: 28px; /* Reduced width */
             display: flex;
             align-items: center;
             justify-content: center;
+            font-size: 13px; /* Smaller font size */
         }
         
         .editor-btn:hover {
@@ -2192,18 +2215,33 @@
         }
         
         #compose-body {
+            flex: 1;
+            min-height: 350px;
+            height: calc(100% - 45px); /* Subtract toolbar height */
             background-color: white;
             border-radius: 4px;
-            min-height: 250px;
-            max-height: 250px;
             font-family: Arial, sans-serif;
             font-size: 14px;
             line-height: 1.4;
+            border: 1px solid #ccc;
+            padding: 8px;
+            overflow-y: auto;
+            box-sizing: border-box;
+            margin-bottom: 0;
         }
         
         #compose-body:focus {
             outline: none;
             border-color: #1a73e8;
+        }
+
+        #subject-line {
+            width: calc(100% - 24px);
+            margin: 6px 12px; /* Reduced from 10px to 6px top/bottom margin */
+            padding: 8px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -2324,8 +2362,8 @@
                 <span class="close-modal" onclick="closeComposeModal()">&times;</span>
             </div>
             <div class="modal-body">
-                <input type="text" id="compose-to" placeholder="To">
-                <input type="text" id="compose-subject" placeholder="Subject" style="font-weight: bold; font-size: 16px; padding: 8px; width: 100%; margin-bottom: 10px; border: 1px solid #1a73e8;">
+                <input type="text" id="compose-to" placeholder="To" style="font-size: 14px; padding: 8px; width: calc(100% - 24px); margin: 6px 12px; border: 1px solid #dadce0; border-radius: 4px; box-sizing: border-box;">
+                <input type="text" id="compose-subject" placeholder="Subject" style="font-weight: bold; font-size: 14px; padding: 8px; width: calc(100% - 24px); margin: 6px 12px; border: 1px solid #dadce0; border-radius: 4px; box-sizing: border-box;">
                 <div class="compose-split-view">
                     <div class="ai-suggestions">
                         <h3>AI Assistant</h3>
