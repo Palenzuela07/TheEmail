@@ -751,29 +751,13 @@
     <!-- JavaScript for animations on scroll -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Initialize all fade elements as invisible first
-            const fadeElements = document.querySelectorAll('.fade-in');
-            fadeElements.forEach(function(element) {
-                element.style.opacity = '0';
-                element.style.transform = 'translateY(20px)';
-            });
+            // Initialize - check for elements already in view on page load
+            checkVisibility();
             
-            // Add slight delay before starting animations
-            setTimeout(function() {
-                // Initialize - check for elements already in view on page load
+            // Add scroll event listener
+            window.addEventListener('scroll', function() {
                 checkVisibility();
-                
-                // Add scroll event listener with throttling for performance
-                let scrollTimeout;
-                window.addEventListener('scroll', function() {
-                    if (!scrollTimeout) {
-                        scrollTimeout = setTimeout(function() {
-                            checkVisibility();
-                            scrollTimeout = null;
-                        }, 20);
-                    }
-                });
-            }, 100);
+            });
             
             // Function to check if elements are visible in viewport
             function checkVisibility() {
@@ -790,7 +774,7 @@
             function isElementInViewport(el) {
                 const rect = el.getBoundingClientRect();
                 return (
-                    rect.top <= (window.innerHeight || document.documentElement.clientHeight) * 0.9 &&
+                    rect.top <= (window.innerHeight || document.documentElement.clientHeight) * 0.85 &&
                     rect.bottom >= 0
                 );
             }

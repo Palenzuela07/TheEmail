@@ -1111,17 +1111,98 @@ async function sendChatMessage() {
     try {
         DEBUG('User message', userMessage);
         
+        // First check if we're awaiting confirmation for an email
+        if (window.awaitingEmailConfirmation === true) {
+            DEBUG("Processing confirmation response via Send button", userMessage);
+            
+            // Add user message to UI
+            messages.innerHTML += `
+                <div class="chat-message user">
+                    ${userMessage}
+                </div>
+            `;
+            input.value = ''; // Clear input field
+            
+            // Check if it's a confirmation
+            const isConfirmation = /^(yes|yeah|yea|yep|sure|ok|okay|y|good|fine|great)/i.test(userMessage);
+            DEBUG("Is confirmation?", isConfirmation);
+            
+            if (isConfirmation) {
+                DEBUG("Confirmation received", {
+                    hasLastGeneratedEmail: !!window.lastGeneratedEmail,
+                    preview: window.lastGeneratedEmail ? 
+                        window.lastGeneratedEmail.substring(0, 50) + "..." : 
+                        "No content"
+                });
+                
+                // Check if lastGeneratedEmail exists and is not empty
+                if (!window.lastGeneratedEmail) {
+                    DEBUG("ERROR: lastGeneratedEmail is empty or null");
+                    
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            Sorry, I couldn't find the email content to move. Let me try generating a new email for you.
+                        </div>
+                    `;
+                    
+                    // Clear confirmation state
+                    window.awaitingEmailConfirmation = false;
+                    window.lastGeneratedEmail = null;
+                    
+                    // Reset state and return - don't continue with regular flow
+                    messages.scrollTop = messages.scrollHeight;
+                    return;
+                }
+                
+                try {
+                    // Move content to compose area
+                    const success = moveEmailToCompose(window.lastGeneratedEmail);
+                    
+                    // Show confirmation message
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            ${success ? 
+                                "I've moved the email to the compose area for you. You can edit it there before sending." : 
+                                "I had trouble moving the email to the compose area. Please try again or let me generate a new email."}
+                        </div>
+                    `;
+                } catch (error) {
+                    DEBUG("ERROR in moveEmailToCompose", error);
+                    
+                    messages.innerHTML += `
+                        <div class="chat-message ai">
+                            Sorry, there was an error moving the email. Please try again.
+                        </div>
+                    `;
+                }
+                
+                // Clear confirmation state and return - don't continue with regular flow
+                window.awaitingEmailConfirmation = false;
+                window.lastGeneratedEmail = null;
+                messages.scrollTop = messages.scrollHeight;
+                return;
+            }
+            
+            // If not a confirmation, clear the state and continue with regular message flow
+            window.awaitingEmailConfirmation = false;
+            window.lastGeneratedEmail = null;
+        }
+        
+        // Continue with regular message flow - this is the original function logic
+        
         // Check if the message appears to be an email request
         const isEmailRequest = checkIfEmailRequest(userMessage);
         DEBUG('Is email request?', isEmailRequest);
         
-        // Add user message to UI
-        messages.innerHTML += `
-            <div class="chat-message user">
-                ${userMessage}
-            </div>
-        `;
-        input.value = ''; // Clear input field
+        // Add user message to UI - skip if we already added it above
+        if (!window.awaitingEmailConfirmation) {
+            messages.innerHTML += `
+                <div class="chat-message user">
+                    ${userMessage}
+                </div>
+            `;
+            input.value = ''; // Clear input field
+        }
         
         // Show loading state
         messages.innerHTML += `
