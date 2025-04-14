@@ -25,7 +25,10 @@ function resetComposeWindow() {
     if (hiddenBody) hiddenBody.value = '';
     
     // Clear any reply-to data
-    if (window.replyToData) window.replyToData = null;
+    if (window.replyToData) {
+        DEBUG("Clearing replyToData", window.replyToData);
+        window.replyToData = null;
+    }
     
     console.log('Compose window has been reset');
 }
@@ -972,6 +975,11 @@ async function openEmail(emailId) {
                 <div class="email-full-metadata">
                     <div>From: ${from}</div>
                     <div>Date: ${formatDate(new Date(date))}</div>
+                    <div>Thread ID: ${email.threadId}</div>
+                    <div>Message ID: ${email.id}</div>
+                </div>
+                <div class="email-actions">
+                    <button class="reply-btn" style="background-color: #1a73e8; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;" onclick="replyEmail('${emailId}')">Reply</button>
                 </div>
             </div>
             <div class="email-full-body">${content}</div>
@@ -1481,10 +1489,21 @@ function openComposeModal(replyTo = null) {
         return;
     }
 
+    // If we're replying to an email, store the data globally
+    if (replyTo) {
+        window.replyToData = replyTo;
+    } else if (window.replyToData) {
+        // If we're not explicitly replying but replyToData exists from somewhere else, keep using it
+        // This handles the case where replyEmail() was called first
+    } else {
+        // Clear any existing reply data
+        window.replyToData = null;
+    }
+
     // Find and update the modal title
     const modalTitle = modal.querySelector('.modal-header h2');
     if (modalTitle) {
-        modalTitle.textContent = replyTo ? 'Reply' : 'New Message';
+        modalTitle.textContent = window.replyToData ? 'Reply' : 'New Message';
     }
 
     // Reset form fields
@@ -1492,20 +1511,29 @@ function openComposeModal(replyTo = null) {
     const subjectField = document.getElementById('compose-subject');
     const bodyField = document.getElementById('compose-body');
     
-    if (toField) toField.value = replyTo?.from || '';
-    if (subjectField) subjectField.value = replyTo?.subject ? `Re: ${replyTo.subject}` : '';
-    if (bodyField) {
-        if (bodyField.getAttribute('contenteditable') === 'true') {
-            bodyField.innerHTML = replyTo ? `
+    if (replyTo) {
+        // Populate fields from explicit replyTo parameter
+        if (toField) toField.value = replyTo.from || '';
+        if (subjectField) subjectField.value = replyTo.subject ? (replyTo.subject.startsWith('Re:') ? replyTo.subject : `Re: ${replyTo.subject}`) : '';
+        if (bodyField) {
+            if (bodyField.getAttribute('contenteditable') === 'true') {
+                bodyField.innerHTML = replyTo.body ? `
 
 On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
-${replyTo.body ? replyTo.body.split('\n').map(line => '> ' + line).join('\n') : ''}` : '';
-        } else {
-            bodyField.value = replyTo ? `
+${replyTo.body.split('\n').map(line => '> ' + line).join('\n')}` : '';
+            } else {
+                bodyField.value = replyTo.body ? `
 
 On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
-${replyTo.body ? replyTo.body.split('\n').map(line => '> ' + line).join('\n') : ''}` : '';
+${replyTo.body.split('\n').map(line => '> ' + line).join('\n')}` : '';
+            }
         }
+    } else if (window.replyToData && !replyTo) {
+        // If replyTo is null but we have replyToData set by replyEmail()
+        if (toField) toField.value = window.replyToData.from || '';
+        if (subjectField) subjectField.value = window.replyToData.subject ? 
+            (window.replyToData.subject.startsWith('Re:') ? window.replyToData.subject : `Re: ${window.replyToData.subject}`) : '';
+        // No need to set body here - it will be filled by AI or user
     }
 
     // Show the modal
@@ -1603,14 +1631,40 @@ async function sendEmail() {
         console.log('Sending email to:', to);
         console.log('Subject:', subject);
 
-        // Create email content
-        const emailContent = [
+        // Check if this is a reply (has threadId and originalMessageId)
+        const isReply = window.replyToData && window.replyToData.threadId;
+        
+        // Create email headers
+        const headers = [
             `From: ${userEmail}`,
             `To: ${to}`,
             'Content-Type: text/plain; charset=utf-8',
             'MIME-Version: 1.0',
-            `Subject: ${subject}`,
-            '',
+            `Subject: ${subject}`
+        ];
+        
+        // Add threading headers for replies
+        if (isReply && window.replyToData.originalMessageId) {
+            // Make sure the message ID has angle brackets if it doesn't already
+            const formattedMessageId = window.replyToData.originalMessageId.includes('<') ? 
+                window.replyToData.originalMessageId : 
+                `<${window.replyToData.originalMessageId}>`;
+            
+            // In-Reply-To and References headers are crucial for proper threading
+            headers.push(`In-Reply-To: ${formattedMessageId}`);
+            headers.push(`References: ${formattedMessageId}`);
+            
+            DEBUG("Adding threading headers", {
+                threadId: window.replyToData.threadId,
+                originalMessageId: window.replyToData.originalMessageId,
+                formattedMessageId: formattedMessageId
+            });
+        }
+        
+        // Create email content
+        const emailContent = [
+            ...headers,
+            '', // Empty line separates headers from body
             body
         ].join('\r\n');
 
@@ -1623,13 +1677,35 @@ async function sendEmail() {
             .replace(/=+$/, '');
 
         console.log('Making API call...');
-
-        const response = await gapi.client.gmail.users.messages.send({
-            'userId': 'me',
-            'resource': {
-                'raw': encodedEmail
-            }
-        });
+        
+        let response;
+        
+        // Different handling for reply vs new email
+        if (isReply) {
+            DEBUG("Sending reply to thread", {
+                threadId: window.replyToData.threadId,
+                hasThreadingHeaders: !!window.replyToData.originalMessageId
+            });
+            
+            // For replies, we'll use the different approach recommended in the Gmail API docs
+            response = await gapi.client.gmail.users.messages.send({
+                'userId': 'me',
+                'resource': {
+                    'raw': encodedEmail,
+                    'threadId': window.replyToData.threadId
+                }
+            });
+            
+            console.log('Reply sent with threadId:', window.replyToData.threadId);
+        } else {
+            // For new emails (not replies)
+            response = await gapi.client.gmail.users.messages.send({
+                'userId': 'me',
+                'resource': {
+                    'raw': encodedEmail
+                }
+            });
+        }
 
         console.log('API Response:', response);
 
@@ -2168,11 +2244,40 @@ async function replyEmail(emailId) {
         const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
         const emailBody = getBody(email.payload);
         
+        // Log all headers to help debug
+        console.log('All headers from email:');
+        headers.forEach(header => {
+            console.log(`${header.name}: ${header.value}`);
+        });
+
+        // Try multiple header names to find the Message-ID
+        let messageIdHeader = headers.find(header => header.name === 'Message-ID')?.value;
+        if (!messageIdHeader) messageIdHeader = headers.find(header => header.name === 'Message-Id')?.value;
+        if (!messageIdHeader) messageIdHeader = headers.find(header => header.name === 'message-id')?.value;
+        if (!messageIdHeader) messageIdHeader = headers.find(header => header.name.toLowerCase() === 'message-id')?.value;
+
+        console.log('Found Message-ID header:', messageIdHeader);
+
         DEBUG("Extracted email info for reply", { 
             to: replyToEmail, 
             subject: subject,
-            bodyLength: emailBody?.length || 0
+            bodyLength: emailBody?.length || 0,
+            threadId: email.threadId,
+            messageId: messageIdHeader
         });
+
+        // Store original email details including threadId for proper threading
+        window.replyToData = {
+            from: replyToEmail,
+            subject: subject,
+            body: emailBody,
+            threadId: email.threadId, // Store threadId for proper threading
+            messageId: email.id, // Gmail's internal message ID
+            originalMessageId: messageIdHeader || `<${email.id}@mail.gmail.com>` // Message-ID header or create a fallback
+        };
+
+        // Add debug of what we're actually storing
+        console.log('Stored replyToData:', window.replyToData);
 
         // Update the compose modal with email details
         document.getElementById('compose-to').value = replyToEmail;
