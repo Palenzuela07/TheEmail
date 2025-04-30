@@ -916,8 +916,33 @@ async function openEmail(emailId) {
     try {
         currentEmail = emailId;
         
-        // Hide email tabs when viewing an email
-        document.getElementById('email-tabs').style.display = 'none';
+        // Get references to DOM elements
+        const emailViewer = document.getElementById('email-viewer');
+        const emailContent = document.getElementById('email-viewer-content');
+        const emailTabs = document.getElementById('email-tabs');
+        const emailList = document.getElementById('emailList');
+
+        if (!emailViewer || !emailContent) {
+            throw new Error('Required email viewer elements not found');
+        }
+
+        // Update the email viewer header first
+        const emailViewerHeader = document.querySelector('.email-viewer-header');
+        if (emailViewerHeader) {
+            emailViewerHeader.innerHTML = `
+                <button class="back-button" onclick="closeEmail()">← Back</button>
+                <div class="email-actions">
+                    <button onclick="deleteEmail(currentEmail)">Delete</button>
+                    <button onclick="replyEmail(currentEmail)">Reply</button>
+                </div>
+            `;
+        }
+
+        // Show loading state
+        emailContent.innerHTML = '<div style="text-align: center; padding: 20px;">Loading email...</div>';
+        emailViewer.style.display = 'block';
+        emailList.style.display = 'none';
+        emailTabs.style.display = 'none';
 
         // Mark the email as read when opened
         await markAsRead(emailId);
@@ -930,67 +955,196 @@ async function openEmail(emailId) {
         });
 
         const email = response.result;
-        const headers = email.payload.headers;
-        
-        // Extract email metadata
-        const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
-        const from = headers.find(header => header.name === 'From')?.value || '';
-        const date = headers.find(header => header.name === 'Date')?.value || '';
+        const threadId = email.threadId;
 
-        // Get email body content
-        let content = '';
-        
-        function getBody(payload) {
-            if (payload.parts) {
-                // Handle multipart message
-                for (let part of payload.parts) {
-                    if (part.mimeType === 'text/html') {
-                        return decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
-                    }
-                    if (part.mimeType === 'text/plain' && !content) {
-                        content = decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
-                    }
-                    if (part.parts) {
-                        const nestedContent = getBody(part);
-                        if (nestedContent) return nestedContent;
-                    }
-                }
-                return content;
-            } else if (payload.body.data) {
-                // Handle single part message
-                return decodeURIComponent(escape(atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
-            }
-            return '';
+        console.log('Fetching thread:', threadId);
+
+        // Fetch all messages in the thread
+        const threadResponse = await gapi.client.gmail.users.threads.get({
+            'userId': 'me',
+            'id': threadId,
+            'format': 'full'
+        });
+
+        const thread = threadResponse.result;
+        const messages = thread.messages || [];
+
+        console.log('Thread messages:', messages.length);
+
+        // Sort messages by date (oldest first)
+        messages.sort((a, b) => {
+            const dateA = new Date(a.payload.headers.find(h => h.name === 'Date')?.value || 0);
+            const dateB = new Date(b.payload.headers.find(h => h.name === 'Date')?.value || 0);
+            return dateA - dateB;
+        });
+
+        // Create HTML for the thread
+        let threadHtml = '';
+        for (let i = 0; i < messages.length; i++) {
+            const msg = messages[i];
+            const headers = msg.payload.headers;
+            const from = headers.find(header => header.name === 'From')?.value || '';
+            const date = headers.find(header => header.name === 'Date')?.value || '';
+            const content = getBody(msg.payload);
+
+            // Extract sender name from email
+            const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
+            const senderName = senderMatch ? senderMatch[1].trim() : from;
+
+            // Add thread line indicators
+            const isFirst = i === 0;
+            const isLast = i === messages.length - 1;
+            const isCurrent = msg.id === emailId;
+
+            threadHtml += `
+                <div class="email-message ${isCurrent ? 'current-message' : ''}" 
+                     style="position: relative; margin-left: ${i * 10}px;">
+                    <div class="thread-line" style="
+                        position: absolute;
+                        left: -20px;
+                        top: 0;
+                        bottom: ${isLast ? '50%' : '0'};
+                        width: 2px;
+                        background-color: ${isCurrent ? '#1a73e8' : '#dadce0'};
+                        ${isFirst ? 'top: 50%;' : ''}
+                    "></div>
+                    <div class="message-header">
+                        <div class="message-sender-info">
+                            <div class="message-sender">${senderName}</div>
+                            <div class="message-date">${formatDate(new Date(date))}</div>
+                        </div>
+                        ${isCurrent ? '<div class="current-indicator">Current Message</div>' : ''}
+                    </div>
+                    <div class="message-content">${content}</div>
+                </div>
+            `;
         }
 
-        content = getBody(email.payload);
+        // Add styles for threading
+        const threadStyles = `
+        <style>
+            .thread-container {
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 20px;
+                position: relative;
+            }
 
-        // Display the email
-        const emailViewer = document.getElementById('email-viewer');
-        const emailContent = document.getElementById('email-viewer-content');
-        
-        emailContent.innerHTML = `
-            <div class="email-full-header">
-                <h1 class="email-full-subject">${subject}</h1>
-                <div class="email-full-metadata">
-                    <div>From: ${from}</div>
-                    <div>Date: ${formatDate(new Date(date))}</div>
-                    <div>Thread ID: ${email.threadId}</div>
-                    <div>Message ID: ${email.id}</div>
-                </div>
-                <div class="email-actions">
-                    <button class="reply-btn" style="background-color: #1a73e8; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;" onclick="replyEmail('${emailId}')">Reply</button>
-                </div>
-            </div>
-            <div class="email-full-body">${content}</div>
+            .email-message {
+                position: relative;
+                margin-bottom: 20px;
+                padding: 20px;
+                border: 1px solid #dadce0;
+                border-radius: 8px;
+                background-color: white;
+                transition: all 0.2s;
+                box-shadow: 0 1px 2px rgba(60,64,67,0.1);
+            }
+
+            .email-message:hover {
+                box-shadow: 0 2px 8px rgba(60,64,67,0.2);
+            }
+
+            .email-message.current-message {
+                background-color: #f8f9fa;
+                border-color: #1a73e8;
+                box-shadow: 0 2px 8px rgba(26,115,232,0.2);
+            }
+
+            .message-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #f1f3f4;
+            }
+
+            .message-sender-info {
+                flex: 1;
+            }
+
+            .message-sender {
+                font-weight: 500;
+                color: #202124;
+                margin-bottom: 4px;
+            }
+
+            .message-date {
+                color: #5f6368;
+                font-size: 0.9em;
+            }
+
+            .current-indicator {
+                font-size: 12px;
+                color: #1a73e8;
+                background: #e8f0fe;
+                padding: 4px 8px;
+                border-radius: 12px;
+                margin-left: 8px;
+            }
+
+            .message-content {
+                white-space: pre-wrap;
+                color: #202124;
+                line-height: 1.5;
+                font-size: 14px;
+            }
+
+            .email-full-header {
+                padding: 20px;
+                border-bottom: 1px solid #dadce0;
+                background-color: white;
+                margin-bottom: 20px;
+            }
+
+            .email-full-subject {
+                margin: 0;
+                font-size: 22px;
+                color: #202124;
+            }
+
+            .thread-line {
+                transition: background-color 0.2s;
+            }
+
+            .email-message:hover .thread-line {
+                background-color: #1a73e8;
+            }
+        </style>
         `;
 
-        emailViewer.style.display = 'block';
-        document.getElementById('emailList').style.display = 'none';
+        // Update the email viewer content with styles
+        emailContent.innerHTML = `
+            ${threadStyles}
+            <div class="email-full-header">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="flex: 1;">
+                        <h1 class="email-full-subject">${messages[0].payload.headers.find(h => h.name === 'Subject')?.value || '(no subject)'}</h1>
+                    </div>
+                </div>
+            </div>
+            <div class="thread-container">
+                ${threadHtml}
+            </div>
+        `;
 
     } catch (error) {
         console.error('Error opening email:', error);
-        alert('Error opening email. Please try again.');
+        
+        // Show error message in the email viewer
+        const emailContent = document.getElementById('email-viewer-content');
+        if (emailContent) {
+            emailContent.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #d93025;">
+                    <h3>Error Opening Email</h3>
+                    <p>${error.message || 'An unexpected error occurred. Please try again.'}</p>
+                    <button onclick="closeEmail()" style="margin-top: 15px; padding: 8px 16px; background: #1a73e8; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Return to Inbox
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 
@@ -2317,21 +2471,73 @@ async function replyEmail(emailId) {
     }
 }
 
+// Function to extract email body content
 function getBody(payload) {
-    let content = '';
-    if (payload.parts) {
-        for (let part of payload.parts) {
-            if (part.mimeType === 'text/plain' && part.body.data) {
-                content += decodeURIComponent(escape(atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
+    if (!payload) return '';
+
+    try {
+        let content = '';
+
+        // Handle multipart messages
+        if (payload.parts) {
+            // First try to find HTML part
+            for (let part of payload.parts) {
+                if (part.mimeType === 'text/html' && part.body.data) {
+                    return decodeEmailContent(part.body.data);
+                }
             }
-            if (part.parts) {
-                content += getBody(part);
+            
+            // If no HTML, look for plain text
+            for (let part of payload.parts) {
+                if (part.mimeType === 'text/plain' && part.body.data) {
+                    content = decodeEmailContent(part.body.data);
+                    break;
+                }
             }
+            
+            // If still no content, recursively check nested parts
+            if (!content) {
+                for (let part of payload.parts) {
+                    if (part.parts) {
+                        content = getBody(part);
+                        if (content) break;
+                    }
+                }
+            }
+        } 
+        // Handle single part messages
+        else if (payload.body && payload.body.data) {
+            content = decodeEmailContent(payload.body.data);
         }
-    } else if (payload.body.data) {
-        content = decodeURIComponent(escape(atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))));
+
+        return content || 'No content available';
+    } catch (error) {
+        console.error('Error extracting email body:', error);
+        return 'Error extracting email content';
     }
-    return content;
+}
+
+// Helper function to decode email content
+function decodeEmailContent(data) {
+    try {
+        // Replace special characters that come from base64url encoding
+        const text = data.replace(/-/g, '+').replace(/_/g, '/');
+        
+        // Decode base64
+        const decoded = atob(text);
+        
+        // Handle UTF-8 encoding
+        const escaped = decodeURIComponent(escape(decoded));
+        
+        // Basic HTML sanitization
+        return escaped
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+            .replace(/on\w+="[^"]*"/g, '') // Remove inline event handlers
+            .replace(/javascript:/gi, ''); // Remove javascript: protocols
+    } catch (error) {
+        console.error('Error decoding email content:', error);
+        return 'Error decoding email content';
+    }
 }
 
 async function generateAIReply(emailBody) {
