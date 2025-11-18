@@ -1039,6 +1039,9 @@ async function openEmail(emailId) {
                 background-color: white;
                 transition: all 0.2s;
                 box-shadow: 0 1px 2px rgba(60,64,67,0.1);
+                overflow-wrap: break-word;
+                word-wrap: break-word;
+                word-break: break-word;
             }
 
             .email-message:hover {
@@ -1089,6 +1092,35 @@ async function openEmail(emailId) {
                 color: #202124;
                 line-height: 1.5;
                 font-size: 14px;
+                max-width: 100%;
+                overflow-x: auto;
+            }
+
+            .message-content img {
+                max-width: 100%;
+                height: auto;
+                display: block;
+                margin: 10px 0;
+            }
+
+            .message-content table {
+                max-width: 100%;
+                overflow-x: auto;
+                display: block;
+            }
+
+            .message-content * {
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+
+            .message-content div,
+            .message-content span,
+            .message-content p {
+                max-width: 100%;
+                overflow-wrap: break-word;
+                word-wrap: break-word;
+                word-break: break-word;
             }
 
             .email-full-header {
@@ -1102,6 +1134,9 @@ async function openEmail(emailId) {
                 margin: 0;
                 font-size: 22px;
                 color: #202124;
+                overflow-wrap: break-word;
+                word-wrap: break-word;
+                word-break: break-word;
             }
 
             .thread-line {
@@ -1110,6 +1145,40 @@ async function openEmail(emailId) {
 
             .email-message:hover .thread-line {
                 background-color: #1a73e8;
+            }
+
+            /* Handle email attachments */
+            .message-content .attachment {
+                max-width: 100%;
+                margin: 10px 0;
+                padding: 10px;
+                border: 1px solid #dadce0;
+                border-radius: 4px;
+                background: #f8f9fa;
+            }
+
+            .message-content .attachment img {
+                max-width: 100%;
+                height: auto;
+            }
+
+            /* Handle quoted text */
+            .message-content blockquote {
+                margin: 10px 0;
+                padding-left: 10px;
+                border-left: 2px solid #dadce0;
+                color: #5f6368;
+            }
+
+            /* Handle links */
+            .message-content a {
+                color: #1a73e8;
+                text-decoration: none;
+                word-break: break-all;
+            }
+
+            .message-content a:hover {
+                text-decoration: underline;
             }
         </style>
         `;
@@ -2529,11 +2598,23 @@ function decodeEmailContent(data) {
         // Handle UTF-8 encoding
         const escaped = decodeURIComponent(escape(decoded));
         
-        // Basic HTML sanitization
+        // Basic HTML sanitization while preserving image tags and other safe elements
         return escaped
             .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
             .replace(/on\w+="[^"]*"/g, '') // Remove inline event handlers
-            .replace(/javascript:/gi, ''); // Remove javascript: protocols
+            .replace(/javascript:/gi, '') // Remove javascript: protocols
+            .replace(/(src|href)="cid:([^"]+)"/gi, '$1="data:image/jpeg;base64,$2"') // Handle inline images
+            .replace(/<img[^>]+>/gi, (match) => { // Process image tags
+                // Keep only safe attributes
+                return match
+                    .replace(/width="[^"]*"/gi, 'style="max-width:100%"')
+                    .replace(/height="[^"]*"/gi, '')
+                    .replace(/style="[^"]*"/gi, 'style="max-width:100%"');
+            })
+            .replace(/<table[^>]*>/gi, '<table style="max-width:100%;display:block;overflow-x:auto;">') // Make tables scrollable
+            .replace(/<div[^>]*>/gi, (match) => { // Process div tags
+                return match.replace(/style="[^"]*"/gi, '') + 'style="max-width:100%;word-wrap:break-word;"';
+            });
     } catch (error) {
         console.error('Error decoding email content:', error);
         return 'Error decoding email content';
