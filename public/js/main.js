@@ -267,9 +267,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Only try to set up compose button if we're on the app page
     if (window.location.pathname === '/app') {
-        const composeButton = document.querySelector('.compose-btn');
+        const composeButton = document.getElementById('compose-btn-sidebar');
         if (composeButton) {
-            composeButton.addEventListener('click', openComposeModal);
+            composeButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                openComposeModal(null);
+            });
         }
     }
 
@@ -1719,15 +1722,22 @@ ${replyTo.body.split('\n').map(line => '> ' + line).join('\n')}` : '';
     }
 }
 
-// Make sure the compose button explicitly calls with null parameter
+// Make sure the compose button explicitly calls with null parameter and restore sidebar state
 document.addEventListener('DOMContentLoaded', function() {
-    const composeBtn = document.querySelector('.compose-btn');
-    if (composeBtn) {
-        composeBtn.onclick = function(e) {
+    // Handle sidebar compose button
+    const composeBtnSidebar = document.getElementById('compose-btn-sidebar');
+    if (composeBtnSidebar) {
+        composeBtnSidebar.onclick = function(e) {
             e.preventDefault();
-            openComposeModal(null); // Explicitly pass null to ensure it's a new message
+            openComposeModal(null);
             console.log('Compose button clicked - opening new message');
         };
+    }
+    
+    // Restore sidebar collapsed state
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && localStorage.getItem('sidebarCollapsed') === 'true') {
+        sidebar.classList.add('collapsed');
     }
 });
 
@@ -1739,6 +1749,7 @@ function closeComposeModal() {
     if (modal) {
         modal.style.display = 'none';
         modal.classList.remove('show');
+        modal.classList.remove('minimized');
     }
     
     document.body.classList.remove('modal-open');
@@ -1751,6 +1762,58 @@ function closeComposeModal() {
     
     console.log('Compose modal closed and reset');
 }
+
+// Toggle compose modal minimize/restore
+function toggleComposeModal() {
+    const modal = document.getElementById('compose-modal');
+    if (!modal || modal.style.display === 'none') return;
+    
+    if (modal.classList.contains('minimized')) {
+        // Restore modal
+        modal.classList.remove('minimized');
+        modal.style.height = '650px';
+        modal.style.width = '800px';
+    } else {
+        // Minimize modal
+        modal.classList.add('minimized');
+        modal.style.height = '60px';
+        modal.style.width = '300px';
+    }
+}
+
+// Allow clicking minimized modal header to restore
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('compose-modal');
+    if (modal) {
+        const modalHeader = modal.querySelector('.modal-header');
+        if (modalHeader) {
+            modalHeader.addEventListener('click', function(e) {
+                // Only restore if minimized and not clicking buttons
+                if (modal.classList.contains('minimized') && 
+                    !e.target.closest('.minimize-modal-btn') && 
+                    !e.target.closest('.close-modal')) {
+                    toggleComposeModal();
+                }
+            });
+        }
+    }
+});
+
+// Toggle sidebar collapse/expand
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    
+    sidebar.classList.toggle('collapsed');
+    
+    // Save state to localStorage
+    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+}
+
+// Make functions globally accessible
+window.toggleComposeModal = toggleComposeModal;
+window.toggleSidebar = toggleSidebar;
+
 
 // Function to send an email
 async function sendEmail() {
@@ -1884,7 +1947,13 @@ async function sendEmail() {
 }
 
 // Ensure the compose button is correctly set up
-document.querySelector('.compose-btn').onclick = () => openComposeModal();
+const composeBtn = document.getElementById('compose-btn-sidebar');
+if (composeBtn) {
+    composeBtn.onclick = function(e) {
+        e.preventDefault();
+        openComposeModal(null);
+    };
+}
 
 // Helper function to add a timeout to a promise
 function withTimeout(promise, timeout) {
