@@ -991,80 +991,38 @@ async function openEmail(emailId) {
             const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
             const senderName = senderMatch ? senderMatch[1].trim() : from;
 
-            // Add thread line indicators
-            const isFirst = i === 0;
-            const isLast = i === messages.length - 1;
-            const isCurrent = msg.id === emailId;
-
             threadHtml += `
-                <div class="email-message ${isCurrent ? 'current-message' : ''}" 
-                     style="position: relative; margin-left: ${i * 10}px;">
-                    <div class="thread-line" style="
-                        position: absolute;
-                        left: -20px;
-                        top: 0;
-                        bottom: ${isLast ? '50%' : '0'};
-                        width: 2px;
-                        background-color: ${isCurrent ? '#1a73e8' : '#dadce0'};
-                        ${isFirst ? 'top: 50%;' : ''}
-                    "></div>
+                <div class="email-message">
                     <div class="message-header">
-                        <div class="message-sender-info">
-                            <div class="message-sender">${senderName}</div>
-                            <div class="message-date">${formatDate(new Date(date))}</div>
-                        </div>
-                        ${isCurrent ? '<div class="current-indicator">Current Message</div>' : ''}
+                        <div class="message-sender">${senderName}</div>
+                        <div class="message-date">${formatDate(new Date(date))}</div>
                     </div>
                     <div class="message-content">${content}</div>
                 </div>
             `;
         }
 
-        // Add styles for threading
+        // Simple email styles - minimal and clean
         const threadStyles = `
         <style>
             .thread-container {
-                max-width: 900px;
-                margin: 0 auto;
                 padding: 20px;
-                position: relative;
             }
 
             .email-message {
-                position: relative;
-                margin-bottom: 20px;
-                padding: 20px;
-                border: 1px solid #dadce0;
-                border-radius: 8px;
-                background-color: white;
-                transition: all 0.2s;
-                box-shadow: 0 1px 2px rgba(60,64,67,0.1);
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-                word-break: break-word;
+                margin-bottom: 24px;
+                padding-bottom: 24px;
+                border-bottom: 1px solid #e0e0e0;
             }
 
-            .email-message:hover {
-                box-shadow: 0 2px 8px rgba(60,64,67,0.2);
-            }
-
-            .email-message.current-message {
-                background-color: #f8f9fa;
-                border-color: #1a73e8;
-                box-shadow: 0 2px 8px rgba(26,115,232,0.2);
+            .email-message:last-child {
+                border-bottom: none;
             }
 
             .message-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 15px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid #f1f3f4;
-            }
-
-            .message-sender-info {
-                flex: 1;
+                margin-bottom: 12px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid #f0f0f0;
             }
 
             .message-sender {
@@ -1075,110 +1033,94 @@ async function openEmail(emailId) {
 
             .message-date {
                 color: #5f6368;
-                font-size: 0.9em;
-            }
-
-            .current-indicator {
-                font-size: 12px;
-                color: #1a73e8;
-                background: #e8f0fe;
-                padding: 4px 8px;
-                border-radius: 12px;
-                margin-left: 8px;
+                font-size: 13px;
             }
 
             .message-content {
-                white-space: pre-wrap;
-                color: #202124;
-                line-height: 1.5;
                 font-size: 14px;
+                line-height: 1.5;
+                color: #202124;
                 max-width: 100%;
                 overflow-x: auto;
+                word-wrap: break-word;
+                /* Don't set text-align here - let email HTML control it */
             }
 
+            /* Simple constraints - just prevent overflow, preserve email styling */
             .message-content img {
                 max-width: 100%;
                 height: auto;
-                display: block;
-                margin: 10px 0;
             }
 
+            /* Only make tables scrollable if they're too wide, preserve their display */
             .message-content table {
                 max-width: 100%;
                 overflow-x: auto;
-                display: block;
             }
 
+            /* Preserve centering and alignment from email HTML - use !important to ensure they work */
+            .message-content center {
+                display: block !important;
+                text-align: center !important;
+            }
+
+            .message-content [align="center"] {
+                text-align: center !important;
+            }
+
+            .message-content [align="left"] {
+                text-align: left !important;
+            }
+
+            .message-content [align="right"] {
+                text-align: right !important;
+            }
+
+            /* Ensure inline styles for text-align are preserved and work */
+            .message-content [style*="text-align: center"],
+            .message-content [style*="text-align:center"],
+            .message-content [style*="text-align: center;"],
+            .message-content [style*="text-align:center;"] {
+                text-align: center !important;
+            }
+
+            .message-content [style*="text-align: left"],
+            .message-content [style*="text-align:left"],
+            .message-content [style*="text-align: left;"],
+            .message-content [style*="text-align:left;"] {
+                text-align: left !important;
+            }
+
+            .message-content [style*="text-align: right"],
+            .message-content [style*="text-align:right"],
+            .message-content [style*="text-align: right;"],
+            .message-content [style*="text-align:right;"] {
+                text-align: right !important;
+            }
+
+            /* Only constrain width - don't interfere with alignment */
             .message-content * {
                 max-width: 100%;
                 box-sizing: border-box;
             }
 
-            .message-content div,
-            .message-content span,
-            .message-content p {
-                max-width: 100%;
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-                word-break: break-word;
-            }
-
             .email-full-header {
                 padding: 20px;
                 border-bottom: 1px solid #dadce0;
-                background-color: white;
-                margin-bottom: 20px;
             }
 
             .email-full-subject {
                 margin: 0;
-                font-size: 22px;
-                color: #202124;
-                overflow-wrap: break-word;
-                word-wrap: break-word;
-                word-break: break-word;
+                font-size: 20px;
+                font-weight: 400;
+            }
+
+            .current-indicator {
+                display: none;
             }
 
             .thread-line {
-                transition: background-color 0.2s;
-            }
-
-            .email-message:hover .thread-line {
-                background-color: #1a73e8;
-            }
-
-            /* Handle email attachments */
-            .message-content .attachment {
-                max-width: 100%;
-                margin: 10px 0;
-                padding: 10px;
-                border: 1px solid #dadce0;
-                border-radius: 4px;
-                background: #f8f9fa;
-            }
-
-            .message-content .attachment img {
-                max-width: 100%;
-                height: auto;
-            }
-
-            /* Handle quoted text */
-            .message-content blockquote {
-                margin: 10px 0;
-                padding-left: 10px;
-                border-left: 2px solid #dadce0;
-                color: #5f6368;
-            }
-
-            /* Handle links */
-            .message-content a {
-                color: #1a73e8;
-                text-decoration: none;
-                word-break: break-all;
-            }
-
-            .message-content a:hover {
-                text-decoration: underline;
+                display: none;
             }
         </style>
         `;
@@ -2598,23 +2540,15 @@ function decodeEmailContent(data) {
         // Handle UTF-8 encoding
         const escaped = decodeURIComponent(escape(decoded));
         
-        // Basic HTML sanitization while preserving image tags and other safe elements
+        // Basic HTML sanitization:
+        // - strip scripts
+        // - strip inline event handlers
+        // - strip javascript: URLs
+        // Layout and sizing are handled via CSS instead of rewriting tags here.
         return escaped
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
-            .replace(/on\w+="[^"]*"/g, '') // Remove inline event handlers
-            .replace(/javascript:/gi, '') // Remove javascript: protocols
-            .replace(/(src|href)="cid:([^"]+)"/gi, '$1="data:image/jpeg;base64,$2"') // Handle inline images
-            .replace(/<img[^>]+>/gi, (match) => { // Process image tags
-                // Keep only safe attributes
-                return match
-                    .replace(/width="[^"]*"/gi, 'style="max-width:100%"')
-                    .replace(/height="[^"]*"/gi, '')
-                    .replace(/style="[^"]*"/gi, 'style="max-width:100%"');
-            })
-            .replace(/<table[^>]*>/gi, '<table style="max-width:100%;display:block;overflow-x:auto;">') // Make tables scrollable
-            .replace(/<div[^>]*>/gi, (match) => { // Process div tags
-                return match.replace(/style="[^"]*"/gi, '') + 'style="max-width:100%;word-wrap:break-word;"';
-            });
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/on\w+="[^"]*"/g, '')
+            .replace(/javascript:/gi, '');
     } catch (error) {
         console.error('Error decoding email content:', error);
         return 'Error decoding email content';
