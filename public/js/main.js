@@ -1023,6 +1023,24 @@ async function openEmail(emailId) {
         emailViewer.style.display = 'flex';
         emailViewer.classList.add('show');
         
+        // Show resize divider
+        const resizeDivider = document.getElementById('resize-divider');
+        if (resizeDivider && emailList) {
+            resizeDivider.style.display = 'block';
+            // Restore saved width or use default (40% of container)
+            const savedWidth = localStorage.getItem('emailListWidth');
+            if (savedWidth) {
+                emailList.style.width = savedWidth + 'px';
+            } else {
+                // Set initial width to 40% of container
+                const container = document.querySelector('.email-list-container');
+                if (container) {
+                    const initialWidth = container.offsetWidth * 0.4;
+                    emailList.style.width = initialWidth + 'px';
+                }
+            }
+        }
+        
         // Remove selected class from all email items
         document.querySelectorAll('.email-item').forEach(item => {
             item.classList.remove('selected');
@@ -1384,14 +1402,36 @@ function closeEmail() {
     emailViewer.classList.remove('show');
     document.getElementById('email-viewer-content').innerHTML = ''; // Clear content
     
+    // Hide resize divider
+    const resizeDivider = document.getElementById('resize-divider');
+    if (resizeDivider) {
+        resizeDivider.style.display = 'none';
+    }
+    
+    // Reset email list to full width
+    const emailList = document.getElementById('emailList');
+    if (emailList) {
+        emailList.style.width = '100%';
+    }
+    
     // Remove selected class from all email items
     document.querySelectorAll('.email-item').forEach(item => {
         item.classList.remove('selected');
     });
     
-    // Refresh the email list to reflect read status changes - use force refresh
-    console.log("Triggering force refresh to update read status");
-    refreshEmails(0, true);
+    // Update the read status of the current email item visually (if it was marked as read)
+    // No need to refresh the entire list - just update the visual state
+    if (currentEmail) {
+        const emailItem = document.getElementById(`email-${currentEmail}`);
+        if (emailItem) {
+            // Mark as read visually (remove unread styling)
+            emailItem.classList.add('email-read');
+            emailItem.classList.remove('selected');
+        }
+    }
+    
+    // Clear current email reference
+    currentEmail = null;
 }
 
 // Add this helper function to properly decode email text
@@ -2278,7 +2318,66 @@ document.addEventListener('DOMContentLoaded', () => {
     if (refreshBtn) {
         refreshBtn.onclick = handleRefreshClick;
     }
+    
+    // Initialize resize divider
+    initializeResizeDivider();
 });
+
+// Function to initialize the resize divider
+function initializeResizeDivider() {
+    const divider = document.getElementById('resize-divider');
+    const emailList = document.getElementById('emailList');
+    const emailListContainer = document.querySelector('.email-list-container');
+    
+    if (!divider || !emailList || !emailListContainer) return;
+    
+    let isDragging = false;
+    let startX = 0;
+    let startWidth = 0;
+    
+    divider.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX;
+        startWidth = emailList.offsetWidth;
+        divider.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        
+        const containerWidth = emailListContainer.offsetWidth;
+        const diff = e.clientX - startX;
+        let newWidth = startWidth + diff;
+        
+        // Constrain width between min and max
+        const minWidth = 300;
+        const maxWidth = containerWidth * 0.7; // Max 70% of container
+        
+        if (newWidth < minWidth) {
+            newWidth = minWidth;
+        } else if (newWidth > maxWidth) {
+            newWidth = maxWidth;
+        }
+        
+        emailList.style.width = newWidth + 'px';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            divider.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            
+            // Save width to localStorage
+            const currentWidth = emailList.offsetWidth;
+            localStorage.setItem('emailListWidth', currentWidth);
+        }
+    });
+}
 
 // Helper function to check if emails have changed
 function emailsHaveChanged(newEmails) {

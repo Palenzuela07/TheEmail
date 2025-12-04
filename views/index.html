@@ -333,38 +333,54 @@
         }
 
         .email-list {
-            flex: 0 0 40%;
-            max-width: 40%;
+            width: 40%;
             min-width: 300px;
+            max-width: 70%;
             margin: 0;
             padding-right: 0;
             padding-left: 0;
             background: white;
             border-radius: 8px 0 0 8px;
             box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
-            min-width: 0;
             overflow-y: auto;
-            border-right: 1px solid #eceff1;
-            transition: flex 0.3s ease;
+            border-right: none;
             display: flex;
             flex-direction: column;
+            transition: width 0.1s ease;
         }
 
         /* When email viewer is hidden, email list takes full width */
         .email-list-container:has(.email-viewer[style*="display: none"]) .email-list,
         .email-list-container:not(:has(.email-viewer.show)) .email-list {
-            flex: 1 1 100%;
+            width: 100%;
             max-width: 100%;
             border-right: none;
             border-radius: 8px;
         }
 
+        /* Resize divider */
+        .resize-divider {
+            width: 4px;
+            background: #dadce0;
+            cursor: col-resize;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 10;
+            transition: background-color 0.2s;
+        }
+
+        .resize-divider:hover {
+            background: #1a73e8;
+        }
+
+        .resize-divider.dragging {
+            background: #1a73e8;
+        }
+
         /* When viewer is shown, adjust list width */
         .email-list-container:has(.email-viewer.show) .email-list,
         .email-list-container:has(.email-viewer[style*="display: flex"]) .email-list {
-            flex: 0 0 40%;
-            max-width: 40%;
-            border-right: 1px solid #eceff1;
+            border-right: none;
             border-radius: 8px 0 0 8px;
         }
 
@@ -591,8 +607,7 @@
         .email-viewer {
             background: white !important;
             color: #202124 !important;
-            flex: 0 0 60%;
-            max-width: 60%;
+            flex: 1;
             min-width: 400px;
             margin: 0;
             padding: 0;
@@ -2669,6 +2684,7 @@
                     <div id="emailList" class="email-list">
                         <!-- Emails will be inserted here -->
                     </div>
+                    <div id="resize-divider" class="resize-divider" style="display: none;"></div>
                     <div id="email-viewer" class="email-viewer" style="display: none;">
                         <div class="email-viewer-header">
                             <button class="back-button" onclick="closeEmail()" style="margin-right: auto;">← Back</button>
