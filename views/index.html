@@ -321,16 +321,51 @@
             min-width: 0;
         }
 
+        .email-list-container {
+            display: flex;
+            flex: 1;
+            gap: 0;
+            min-height: 0;
+            overflow: hidden;
+            position: relative;
+            margin: 0 20px;
+            height: calc(100vh - 200px);
+        }
+
         .email-list {
-            max-width: none;
-            margin: 0 20px 0 20px;
+            flex: 0 0 40%;
+            max-width: 40%;
+            min-width: 300px;
+            margin: 0;
             padding-right: 0;
             padding-left: 0;
             background: white;
-            border-radius: 0;
+            border-radius: 8px 0 0 8px;
             box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
             min-width: 0;
-            width: calc(100% - 40px);
+            overflow-y: auto;
+            border-right: 1px solid #eceff1;
+            transition: flex 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* When email viewer is hidden, email list takes full width */
+        .email-list-container:has(.email-viewer[style*="display: none"]) .email-list,
+        .email-list-container:not(:has(.email-viewer.show)) .email-list {
+            flex: 1 1 100%;
+            max-width: 100%;
+            border-right: none;
+            border-radius: 8px;
+        }
+
+        /* When viewer is shown, adjust list width */
+        .email-list-container:has(.email-viewer.show) .email-list,
+        .email-list-container:has(.email-viewer[style*="display: flex"]) .email-list {
+            flex: 0 0 40%;
+            max-width: 40%;
+            border-right: 1px solid #eceff1;
+            border-radius: 8px 0 0 8px;
         }
 
         .email-item {
@@ -539,6 +574,16 @@
             border-bottom-right-radius: 8px;
         }
 
+        .email-item.selected {
+            background-color: #e8f0fe !important;
+            border-left: 3px solid #1a73e8 !important;
+        }
+
+        .email-item.selected .email-subject {
+            font-weight: 600 !important;
+            color: #1a73e8 !important;
+        }
+
         .nav-section {
             margin: 20px 0;
         }
@@ -546,26 +591,36 @@
         .email-viewer {
             background: white !important;
             color: #202124 !important;
-            max-width: 90%;
-            width: 1200px;
-            margin: 0 auto;
+            flex: 0 0 60%;
+            max-width: 60%;
+            min-width: 400px;
+            margin: 0;
             padding: 0;
-            border-radius: 16px;
-            box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3);
+            border-radius: 0 8px 8px 0;
+            box-shadow: -2px 0 4px 0 rgba(60,64,67,0.1);
             position: relative;
             z-index: 1;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .email-viewer[style*="display: flex"],
+        .email-viewer.show {
+            display: flex !important;
         }
 
         .email-viewer-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            padding: 16px;
+            padding: 12px 16px;
             border-bottom: 1px solid #eceff1;
             position: relative;
             z-index: 2;
             background: white;
+            flex-shrink: 0;
         }
 
         .back-button {
@@ -609,9 +664,19 @@
             z-index: 1;
             isolation: isolate; /* Creates a new stacking context */
             max-width: 100%;
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
             width: 100%;
+            flex: 1;
+            min-height: 0;
             contain: content;
+        }
+
+        #email-viewer-content {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
         }
 
         .email-full-body {
@@ -2528,18 +2593,22 @@
                         </button>
                     </div>
                 </div>
-                <div id="emailList" class="email-list">
-                    <!-- Emails will be inserted here -->
-                </div>
-                <div id="email-viewer" class="email-viewer" style="display: none;">
-                    <div class="email-viewer-header">
-                        <button class="back-button" onclick="closeEmail()">← Back</button>
-                        <div class="email-actions">
-                            <button onclick="deleteEmail(currentEmail)">Delete</button>
-                            <button onclick="replyEmail(currentEmail)">Reply</button>
+                <div class="email-list-container">
+                    <div id="emailList" class="email-list">
+                        <!-- Emails will be inserted here -->
+                    </div>
+                    <div id="email-viewer" class="email-viewer" style="display: none;">
+                        <div class="email-viewer-header">
+                            <button class="back-button" onclick="closeEmail()" style="margin-right: auto;">← Back</button>
+                            <div class="email-actions">
+                                <button onclick="deleteEmail(currentEmail)">Delete</button>
+                                <button onclick="replyEmail(currentEmail)">Reply</button>
+                            </div>
+                        </div>
+                        <div class="email-content-wrapper">
+                            <div id="email-viewer-content"></div>
                         </div>
                     </div>
-                    <div id="email-viewer-content"></div>
                 </div>
             </div>
         </div>
@@ -2566,13 +2635,13 @@
             <div class="modal-header">
                 <div class="modal-header-left">
                     <span class="compose-modal-icon">✏️</span>
-                    <h2>New Message</h2>
+                <h2>New Message</h2>
                 </div>
                 <div class="modal-header-right">
                     <button class="minimize-modal-btn" onclick="toggleComposeModal()" title="Minimize">
                         <span class="minimize-icon"></span>
                     </button>
-                    <span class="close-modal" onclick="closeComposeModal()">&times;</span>
+                <span class="close-modal" onclick="closeComposeModal()">&times;</span>
                 </div>
             </div>
             <div class="modal-body">

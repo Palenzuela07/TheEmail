@@ -933,7 +933,7 @@ async function openEmail(emailId) {
         const emailViewerHeader = document.querySelector('.email-viewer-header');
         if (emailViewerHeader) {
             emailViewerHeader.innerHTML = `
-                <button class="back-button" onclick="closeEmail()">← Back</button>
+                <button class="back-button" onclick="closeEmail()" style="margin-right: auto;">← Back</button>
                 <div class="email-actions">
                     <button onclick="deleteEmail(currentEmail)">Delete</button>
                     <button onclick="replyEmail(currentEmail)">Reply</button>
@@ -943,9 +943,28 @@ async function openEmail(emailId) {
 
         // Show loading state
         emailContent.innerHTML = '<div style="text-align: center; padding: 20px;">Loading email...</div>';
-        emailViewer.style.display = 'block';
-        emailList.style.display = 'none';
-        emailTabs.style.display = 'none';
+        emailViewer.style.display = 'flex';
+        emailViewer.classList.add('show');
+        
+        // Remove selected class from all email items
+        document.querySelectorAll('.email-item').forEach(item => {
+            item.classList.remove('selected');
+        });
+        
+        // Add selected class to the clicked email item
+        const clickedEmailItem = document.getElementById(`email-${emailId}`);
+        if (clickedEmailItem) {
+            clickedEmailItem.classList.add('selected');
+            // Scroll the selected item into view
+            clickedEmailItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        // Add class to container to indicate viewer is open
+        const emailListContainer = document.querySelector('.email-list-container');
+        if (emailListContainer) {
+            emailListContainer.classList.add('viewer-open');
+        }
+        // Keep email list and tabs visible - they'll be side by side
 
         // Mark the email as read when opened
         await markAsRead(emailId);
@@ -961,7 +980,7 @@ async function openEmail(emailId) {
         const threadId = email.threadId;
 
         console.log('Fetching thread:', threadId);
-
+        
         // Fetch all messages in the thread
         const threadResponse = await gapi.client.gmail.users.threads.get({
             'userId': 'me',
@@ -986,8 +1005,8 @@ async function openEmail(emailId) {
         for (let i = 0; i < messages.length; i++) {
             const msg = messages[i];
             const headers = msg.payload.headers;
-            const from = headers.find(header => header.name === 'From')?.value || '';
-            const date = headers.find(header => header.name === 'Date')?.value || '';
+        const from = headers.find(header => header.name === 'From')?.value || '';
+        const date = headers.find(header => header.name === 'Date')?.value || '';
             const content = getBody(msg.payload);
 
             // Extract sender name from email
@@ -1069,7 +1088,7 @@ async function openEmail(emailId) {
 
             .message-content [align="center"] {
                 text-align: center !important;
-            }
+                    }
 
             .message-content [align="left"] {
                 text-align: left !important;
@@ -1092,7 +1111,7 @@ async function openEmail(emailId) {
             .message-content [style*="text-align: left;"],
             .message-content [style*="text-align:left;"] {
                 text-align: left !important;
-            }
+        }
 
             .message-content [style*="text-align: right"],
             .message-content [style*="text-align:right"],
@@ -1135,8 +1154,8 @@ async function openEmail(emailId) {
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div style="flex: 1;">
                         <h1 class="email-full-subject">${messages[0].payload.headers.find(h => h.name === 'Subject')?.value || '(no subject)'}</h1>
-                    </div>
                 </div>
+            </div>
             </div>
             <div class="thread-container">
                 ${threadHtml}
@@ -1163,13 +1182,16 @@ async function openEmail(emailId) {
 }
 
 function closeEmail() {
-    console.log("Closing email and returning to list view");
-    document.getElementById('email-viewer').style.display = 'none';
-    document.getElementById('emailList').style.display = 'block';
+    console.log("Closing email viewer");
+    const emailViewer = document.getElementById('email-viewer');
+    emailViewer.style.display = 'none';
+    emailViewer.classList.remove('show');
     document.getElementById('email-viewer-content').innerHTML = ''; // Clear content
     
-    // Show email tabs again
-    document.getElementById('email-tabs').style.display = 'flex';
+    // Remove selected class from all email items
+    document.querySelectorAll('.email-item').forEach(item => {
+        item.classList.remove('selected');
+    });
     
     // Refresh the email list to reflect read status changes - use force refresh
     console.log("Triggering force refresh to update read status");
@@ -1683,13 +1705,13 @@ function openComposeModal(replyTo = null) {
         // Populate fields from explicit replyTo parameter
         if (toField) toField.value = replyTo.from || '';
         if (subjectField) subjectField.value = replyTo.subject ? (replyTo.subject.startsWith('Re:') ? replyTo.subject : `Re: ${replyTo.subject}`) : '';
-        if (bodyField) {
-            if (bodyField.getAttribute('contenteditable') === 'true') {
+    if (bodyField) {
+        if (bodyField.getAttribute('contenteditable') === 'true') {
                 bodyField.innerHTML = replyTo.body ? `
 
 On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
 ${replyTo.body.split('\n').map(line => '> ' + line).join('\n')}` : '';
-            } else {
+        } else {
                 bodyField.value = replyTo.body ? `
 
 On ${replyTo.date || 'earlier'}, ${replyTo.from || 'sender'} wrote:
@@ -1905,7 +1927,7 @@ async function sendEmail() {
             .replace(/=+$/, '');
 
         console.log('Making API call...');
-        
+
         let response;
         
         // Different handling for reply vs new email
@@ -1928,11 +1950,11 @@ async function sendEmail() {
         } else {
             // For new emails (not replies)
             response = await gapi.client.gmail.users.messages.send({
-                'userId': 'me',
-                'resource': {
-                    'raw': encodedEmail
-                }
-            });
+            'userId': 'me',
+            'resource': {
+                'raw': encodedEmail
+            }
+        });
         }
 
         console.log('API Response:', response);
@@ -2491,7 +2513,7 @@ async function replyEmail(emailId) {
         if (!messageIdHeader) messageIdHeader = headers.find(header => header.name.toLowerCase() === 'message-id')?.value;
 
         console.log('Found Message-ID header:', messageIdHeader);
-
+        
         DEBUG("Extracted email info for reply", { 
             to: replyToEmail, 
             subject: subject,
@@ -2556,10 +2578,10 @@ function getBody(payload) {
     if (!payload) return '';
 
     try {
-        let content = '';
+    let content = '';
 
         // Handle multipart messages
-        if (payload.parts) {
+    if (payload.parts) {
             // First try to find HTML part
             for (let part of payload.parts) {
                 if (part.mimeType === 'text/html' && part.body.data) {
@@ -2568,21 +2590,21 @@ function getBody(payload) {
             }
             
             // If no HTML, look for plain text
-            for (let part of payload.parts) {
-                if (part.mimeType === 'text/plain' && part.body.data) {
+        for (let part of payload.parts) {
+            if (part.mimeType === 'text/plain' && part.body.data) {
                     content = decodeEmailContent(part.body.data);
                     break;
-                }
+            }
             }
             
             // If still no content, recursively check nested parts
             if (!content) {
                 for (let part of payload.parts) {
-                    if (part.parts) {
+            if (part.parts) {
                         content = getBody(part);
                         if (content) break;
-                    }
-                }
+            }
+        }
             }
         } 
         // Handle single part messages
