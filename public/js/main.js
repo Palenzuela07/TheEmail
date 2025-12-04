@@ -1070,20 +1070,22 @@ async function openEmail(emailId) {
 
         console.log('Thread messages:', messages.length);
 
-        // Sort messages by date (oldest first)
+        // Sort messages by date (newest first - most recent at top)
         messages.sort((a, b) => {
             const dateA = new Date(a.payload.headers.find(h => h.name === 'Date')?.value || 0);
             const dateB = new Date(b.payload.headers.find(h => h.name === 'Date')?.value || 0);
-            return dateA - dateB;
+            return dateB - dateA; // Reverse order: newest first
         });
 
         // Create HTML for the thread
         let threadHtml = '';
-        for (let i = 0; i < messages.length; i++) {
-            const msg = messages[i];
+        const hasThreadHistory = messages.length > 1;
+        
+        // Helper function to create message HTML
+        function createMessageHtml(msg) {
             const headers = msg.payload.headers;
-        const from = headers.find(header => header.name === 'From')?.value || '';
-        const date = headers.find(header => header.name === 'Date')?.value || '';
+            const from = headers.find(header => header.name === 'From')?.value || '';
+            const date = headers.find(header => header.name === 'Date')?.value || '';
             const content = getBody(msg.payload);
             
             // Extract attachments for this message
@@ -1112,7 +1114,7 @@ async function openEmail(emailId) {
                 attachmentsHtml += '</div>';
             }
 
-            threadHtml += `
+            return `
                 <div class="email-message">
                     <div class="message-header">
                         <div class="message-sender">${senderName}</div>
@@ -1122,6 +1124,27 @@ async function openEmail(emailId) {
                     <div class="message-content">${content}</div>
                 </div>
             `;
+        }
+        
+        // Show the most recent email first (index 0 after sorting)
+        if (messages.length > 0) {
+            threadHtml += createMessageHtml(messages[0]);
+        }
+        
+        // If there are more messages, show thread history
+        if (hasThreadHistory) {
+            threadHtml += `
+                <div class="thread-history-break">
+                    <div class="thread-history-line"></div>
+                    <div class="thread-history-title">Thread History</div>
+                    <div class="thread-history-line"></div>
+                </div>
+            `;
+            
+            // Show the rest of the messages (older ones)
+            for (let i = 1; i < messages.length; i++) {
+                threadHtml += createMessageHtml(messages[i]);
+            }
         }
 
         // Simple email styles - minimal and clean
@@ -1293,6 +1316,29 @@ async function openEmail(emailId) {
                 color: #5f6368;
                 font-size: 12px;
                 flex-shrink: 0;
+            }
+
+            .thread-history-break {
+                display: flex;
+                align-items: center;
+                margin: 32px 0 24px 0;
+                padding: 0 20px;
+            }
+
+            .thread-history-line {
+                flex: 1;
+                height: 1px;
+                background: #dadce0;
+            }
+
+            .thread-history-title {
+                padding: 0 16px;
+                color: #5f6368;
+                font-size: 13px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                white-space: nowrap;
             }
         </style>
         `;
