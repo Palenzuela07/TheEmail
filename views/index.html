@@ -2446,10 +2446,20 @@
             height: 34px; /* Reduced height */
             box-sizing: border-box;
             flex-wrap: nowrap;
-            overflow-x: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
             width: calc(100% - 24px); /* Match the width of input fields */
             margin-left: 12px; /* Match the left margin of input fields */
             margin-right: 12px; /* Match the right margin of input fields */
+        }
+        
+        .editor-toolbar::-webkit-scrollbar {
+            height: 4px;
+        }
+        
+        .editor-toolbar::-webkit-scrollbar-thumb {
+            background: #dadce0;
+            border-radius: 2px;
         }
         
         .editor-btn {
@@ -2477,6 +2487,11 @@
             border-color: #a8a8a8;
         }
         
+        .attachment-btn {
+            flex-shrink: 0 !important;
+            min-width: 28px !important;
+        }
+        
         #compose-body {
             flex: 1;
             min-height: 350px;
@@ -2496,6 +2511,63 @@
         #compose-body:focus {
             outline: none;
             border-color: #1a73e8;
+        }
+
+        #attachments-list {
+            display: none;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-top: 1px solid #dadce0;
+            border-bottom: 1px solid #dadce0;
+            margin: 0 12px;
+        }
+
+        #attachments-list:not(:empty) {
+            display: block;
+        }
+
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 8px;
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        .attachment-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .attachment-name {
+            flex: 1;
+            color: #202124;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .attachment-size {
+            color: #5f6368;
+            font-size: 12px;
+        }
+
+        .attachment-remove {
+            background: none;
+            border: none;
+            color: #d93025;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .attachment-remove:hover {
+            background: #fce8e6;
         }
 
         #subject-line {
@@ -2676,7 +2748,10 @@
                             <button class="editor-btn" onclick="formatText('insertOrderedList')" title="Numbered List">1.</button>
                             <span style="width: 1px; background: #dadce0; margin: 0 4px;"></span>
                             <button class="editor-btn" onclick="formatText('link')" title="Insert Link">🔗</button>
+                            <button class="editor-btn attachment-btn" onclick="document.getElementById('attachment-input').click()" title="Add Attachment" style="flex-shrink: 0; min-width: 32px; font-size: 16px;">📎</button>
                         </div>
+                        <input type="file" id="attachment-input" multiple style="display: none;" onchange="handleAttachmentSelect(event)">
+                        <div id="attachments-list" style="display: none; padding: 8px 12px; background: #f8f9fa; border-top: 1px solid #dadce0; border-bottom: 1px solid #dadce0;"></div>
                         <div id="compose-body" contenteditable="true"></div>
                         <!-- Hidden textarea to store content for moveToCompose -->
                         <textarea id="compose-body-hidden" style="display: none;"></textarea>

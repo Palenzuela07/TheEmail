@@ -1,5 +1,6 @@
 // Add at the very top of the file
 let selectedEmails = new Set();
+let emailAttachments = []; // Store attachments for the current email
 
 // Function to reset compose window form fields
 function resetComposeWindow() {
@@ -24,6 +25,10 @@ function resetComposeWindow() {
     const hiddenBody = document.getElementById('compose-body-hidden');
     if (hiddenBody) hiddenBody.value = '';
     
+    // Clear attachments
+    emailAttachments = [];
+    updateAttachmentsList();
+    
     // Clear any reply-to data
     if (window.replyToData) {
         DEBUG("Clearing replyToData", window.replyToData);
@@ -31,6 +36,78 @@ function resetComposeWindow() {
     }
     
     console.log('Compose window has been reset');
+}
+
+// Function to handle file selection for attachments
+function handleAttachmentSelect(event) {
+    const files = Array.from(event.target.files);
+    
+    files.forEach(file => {
+        // Check if file already exists
+        if (!emailAttachments.find(att => att.name === file.name && att.size === file.size)) {
+            emailAttachments.push(file);
+        }
+    });
+    
+    updateAttachmentsList();
+    
+    // Reset the input so the same file can be selected again if needed
+    event.target.value = '';
+}
+
+// Make function globally accessible
+window.handleAttachmentSelect = handleAttachmentSelect;
+
+// Function to remove an attachment
+function removeAttachment(index) {
+    emailAttachments.splice(index, 1);
+    updateAttachmentsList();
+}
+
+// Make function globally accessible
+window.removeAttachment = removeAttachment;
+
+// Function to update the attachments list display
+function updateAttachmentsList() {
+    const attachmentsList = document.getElementById('attachments-list');
+    if (!attachmentsList) return;
+    
+    if (emailAttachments.length === 0) {
+        attachmentsList.innerHTML = '';
+        attachmentsList.style.display = 'none';
+        return;
+    }
+    
+    attachmentsList.style.display = 'block';
+    attachmentsList.innerHTML = emailAttachments.map((file, index) => {
+        const size = formatFileSize(file.size);
+        return `
+            <div class="attachment-item">
+                <span class="attachment-name" title="${file.name}">📎 ${file.name}</span>
+                <span class="attachment-size">${size}</span>
+                <button class="attachment-remove" onclick="removeAttachment(${index})" title="Remove">×</button>
+            </div>
+        `;
+    }).join('');
+}
+
+// Function to format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Function to read a file as base64
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 // Consolidated function to move content to compose window
@@ -1008,10 +1085,32 @@ async function openEmail(emailId) {
         const from = headers.find(header => header.name === 'From')?.value || '';
         const date = headers.find(header => header.name === 'Date')?.value || '';
             const content = getBody(msg.payload);
+            
+            // Extract attachments for this message
+            const attachments = getAttachments(msg.payload, msg.id);
 
             // Extract sender name from email
             const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
             const senderName = senderMatch ? senderMatch[1].trim() : from;
+            
+            // Create attachments HTML
+            let attachmentsHtml = '';
+            if (attachments.length > 0) {
+                attachmentsHtml = '<div class="message-attachments">';
+                attachments.forEach(att => {
+                    const size = formatFileSize(att.size);
+                    const safeFilename = att.filename.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const safeMimeType = (att.mimeType || 'application/octet-stream').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    attachmentsHtml += `
+                        <div class="attachment-item-view" onclick="downloadAttachment('${msg.id}', '${att.attachmentId}', '${safeFilename}', '${safeMimeType}')">
+                            <span class="attachment-icon">📎</span>
+                            <span class="attachment-name-view">${att.filename}</span>
+                            <span class="attachment-size-view">${size}</span>
+                        </div>
+                    `;
+                });
+                attachmentsHtml += '</div>';
+            }
 
             threadHtml += `
                 <div class="email-message">
@@ -1019,6 +1118,7 @@ async function openEmail(emailId) {
                         <div class="message-sender">${senderName}</div>
                         <div class="message-date">${formatDate(new Date(date))}</div>
                     </div>
+                    ${attachmentsHtml}
                     <div class="message-content">${content}</div>
                 </div>
             `;
@@ -1143,6 +1243,56 @@ async function openEmail(emailId) {
 
             .thread-line {
                 display: none;
+            }
+
+            .message-attachments {
+                margin: 12px 0;
+                padding: 12px;
+                background: #f8f9fa;
+                border: 1px solid #dadce0;
+                border-radius: 4px;
+            }
+
+            .attachment-item-view {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                background: white;
+                border: 1px solid #dadce0;
+                border-radius: 4px;
+                margin-bottom: 8px;
+                cursor: pointer;
+                transition: background-color 0.2s;
+            }
+
+            .attachment-item-view:last-child {
+                margin-bottom: 0;
+            }
+
+            .attachment-item-view:hover {
+                background: #e8f0fe;
+                border-color: #1a73e8;
+            }
+
+            .attachment-icon {
+                font-size: 18px;
+                flex-shrink: 0;
+            }
+
+            .attachment-name-view {
+                flex: 1;
+                color: #1a73e8;
+                font-weight: 500;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .attachment-size-view {
+                color: #5f6368;
+                font-size: 12px;
+                flex-shrink: 0;
             }
         </style>
         `;
@@ -1884,11 +2034,13 @@ async function sendEmail() {
         // Check if this is a reply (has threadId and originalMessageId)
         const isReply = window.replyToData && window.replyToData.threadId;
         
+        // Check if we have attachments
+        const hasAttachments = emailAttachments && emailAttachments.length > 0;
+        
         // Create email headers
         const headers = [
             `From: ${userEmail}`,
             `To: ${to}`,
-            'Content-Type: text/plain; charset=utf-8',
             'MIME-Version: 1.0',
             `Subject: ${subject}`
         ];
@@ -1911,14 +2063,57 @@ async function sendEmail() {
             });
         }
         
-        // Create email content
-        const emailContent = [
-            ...headers,
-            '', // Empty line separates headers from body
-            body
-        ].join('\r\n');
+        let emailContent;
+        
+        if (hasAttachments) {
+            // Create multipart message with attachments
+            const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+            
+            // Build multipart message
+            const parts = [];
+            
+            // Add text body part
+            parts.push(`--${boundary}`);
+            parts.push('Content-Type: text/plain; charset=utf-8');
+            parts.push('Content-Transfer-Encoding: 7bit');
+            parts.push('');
+            parts.push(body);
+            
+            // Add each attachment
+            for (const file of emailAttachments) {
+                const fileData = await readFileAsBase64(file);
+                const base64Data = fileData.split(',')[1]; // Remove data URL prefix
+                
+                parts.push(`--${boundary}`);
+                parts.push(`Content-Type: ${file.type || 'application/octet-stream'}`);
+                parts.push('Content-Transfer-Encoding: base64');
+                parts.push(`Content-Disposition: attachment; filename="${file.name}"`);
+                parts.push('');
+                // Split base64 into 76-character lines (RFC 2045)
+                const base64Lines = base64Data.match(/.{1,76}/g) || [base64Data];
+                parts.push(base64Lines.join('\r\n'));
+            }
+            
+            parts.push(`--${boundary}--`);
+            
+            emailContent = [
+                ...headers,
+                '', // Empty line separates headers from body
+                parts.join('\r\n')
+            ].join('\r\n');
+        } else {
+            // Simple text email without attachments
+            headers.push('Content-Type: text/plain; charset=utf-8');
+            
+            emailContent = [
+                ...headers,
+                '', // Empty line separates headers from body
+                body
+            ].join('\r\n');
+        }
 
-        console.log('Email content:', emailContent);
+        console.log('Email content:', emailContent.substring(0, 500) + '...');
 
         // Base64 encode the email
         const encodedEmail = btoa(unescape(encodeURIComponent(emailContent)))
@@ -2500,6 +2695,9 @@ async function replyEmail(emailId) {
         const subject = headers.find(header => header.name === 'Subject')?.value || '(no subject)';
         const emailBody = getBody(email.payload);
         
+        // Convert HTML email body to plain text for AI processing
+        const plainTextBody = htmlToPlainText(emailBody);
+        
         // Log all headers to help debug
         console.log('All headers from email:');
         headers.forEach(header => {
@@ -2518,6 +2716,7 @@ async function replyEmail(emailId) {
             to: replyToEmail, 
             subject: subject,
             bodyLength: emailBody?.length || 0,
+            plainTextLength: plainTextBody?.length || 0,
             threadId: email.threadId,
             messageId: messageIdHeader
         });
@@ -2539,8 +2738,8 @@ async function replyEmail(emailId) {
         document.getElementById('compose-to').value = replyToEmail;
         document.getElementById('compose-subject').value = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
 
-        // Generate AI response
-        const aiResponse = await generateAIReply(emailBody);
+        // Generate AI response using plain text version
+        const aiResponse = await generateAIReply(plainTextBody);
         DEBUG("AI response received", { responseLength: aiResponse?.length || 0 });
 
         // Store email content globally
@@ -2570,6 +2769,69 @@ async function replyEmail(emailId) {
             </div>
         `;
         messages.scrollTop = messages.scrollHeight;
+    }
+}
+
+// Function to convert HTML to plain text
+function htmlToPlainText(html) {
+    if (!html) return '';
+    
+    // If it's already plain text (no HTML tags), return as is
+    if (!html.includes('<')) {
+        return html.trim();
+    }
+    
+    try {
+        // Create a temporary DOM element to parse HTML
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        
+        // Replace block-level elements with newlines before getting text
+        const blockElements = ['p', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'br', 'tr'];
+        blockElements.forEach(tag => {
+            tempDiv.querySelectorAll(tag).forEach(el => {
+                if (tag === 'br') {
+                    el.replaceWith('\n');
+                } else {
+                    el.insertAdjacentText('afterend', '\n');
+                }
+            });
+        });
+        
+        // Get text content
+        let text = tempDiv.textContent || tempDiv.innerText || '';
+        
+        // Decode HTML entities that might still be present
+        const textArea = document.createElement('textarea');
+        textArea.innerHTML = text;
+        text = textArea.value;
+        
+        // Clean up multiple consecutive whitespace and newlines
+        text = text.replace(/[ \t]+/g, ' '); // Multiple spaces to single space
+        text = text.replace(/\n{3,}/g, '\n\n'); // Multiple newlines to double newline
+        text = text.replace(/[ \t]+\n/g, '\n'); // Spaces before newlines
+        text = text.replace(/\n[ \t]+/g, '\n'); // Spaces after newlines
+        
+        // Trim whitespace
+        text = text.trim();
+        
+        return text;
+    } catch (error) {
+        console.error('Error converting HTML to plain text:', error);
+        // Fallback: simple regex-based stripping
+        return html
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
     }
 }
 
@@ -2645,6 +2907,90 @@ function decodeEmailContent(data) {
         return 'Error decoding email content';
     }
 }
+
+// Function to extract attachments from email payload
+function getAttachments(payload, messageId) {
+    const attachments = [];
+    
+    if (!payload) return attachments;
+    
+    function extractFromParts(parts, messageId) {
+        if (!parts) return;
+        
+        for (const part of parts) {
+            // Check if this part is an attachment
+            if (part.filename && part.body && part.body.attachmentId) {
+                attachments.push({
+                    attachmentId: part.body.attachmentId,
+                    filename: part.filename,
+                    mimeType: part.mimeType || 'application/octet-stream',
+                    size: part.body.size || 0
+                });
+            }
+            
+            // Recursively check nested parts
+            if (part.parts) {
+                extractFromParts(part.parts, messageId);
+            }
+        }
+    }
+    
+    if (payload.parts) {
+        extractFromParts(payload.parts, messageId);
+    } else if (payload.filename && payload.body && payload.body.attachmentId) {
+        // Single attachment
+        attachments.push({
+            attachmentId: payload.body.attachmentId,
+            filename: payload.filename,
+            mimeType: payload.mimeType || 'application/octet-stream',
+            size: payload.body.size || 0
+        });
+    }
+    
+    return attachments;
+}
+
+// Function to download an attachment
+async function downloadAttachment(messageId, attachmentId, filename, mimeType = 'application/octet-stream') {
+    try {
+        const response = await gapi.client.gmail.users.messages.attachments.get({
+            'userId': 'me',
+            'messageId': messageId,
+            'id': attachmentId
+        });
+        
+        const attachment = response.result;
+        const data = attachment.data;
+        
+        // Decode base64url to base64
+        const base64Data = data.replace(/-/g, '+').replace(/_/g, '/');
+        
+        // Convert base64 to blob with proper MIME type
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mimeType });
+        
+        // Create download link
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading attachment:', error);
+        alert('Error downloading attachment: ' + (error.message || 'Unknown error'));
+    }
+}
+
+// Make function globally accessible
+window.downloadAttachment = downloadAttachment;
 
 async function generateAIReply(emailBody) {
     try {
