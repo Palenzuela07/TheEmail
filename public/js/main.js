@@ -1189,9 +1189,12 @@ async function openEmail(emailId) {
             }
 
             .message-sender {
+                font-family: Arial, sans-serif;
+                font-size: 14px;
                 font-weight: 500;
                 color: #202124;
                 margin-bottom: 4px;
+                line-height: 1.4;
             }
 
             .message-date {
