@@ -1,6 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const sequelize = require('./config/database');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const { body, validationResult } = require('express-validator');
 const app = express();
 const path = require('path');
 const fetch = require('node-fetch');
@@ -21,23 +24,30 @@ initDatabase();
 app.engine('html', require('ejs').renderFile);
 app.set('view engine', 'html');
 
-// Add Content Security Policy and cache control middleware
+// Security: Use Helmet for security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'", "https://apis.google.com", "https://accounts.google.com", "https://www.googleapis.com", "https://www.gstatic.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com", "https://accounts.google.com", "https://www.gstatic.com"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://www.gstatic.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com"],
+      connectSrc: ["'self'", "https://apis.google.com", "https://accounts.google.com", "https://www.googleapis.com", "https://www.gstatic.com", "https://api.openai.com", "https://www.google.com"],
+      frameSrc: ["https://accounts.google.com", "https://content.googleapis.com", "https://content-gmail.googleapis.com", "https://*.google.com"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // Required for Google OAuth
+}));
+
+// Cache control headers
 app.use((req, res, next) => {
-    // Set Content Security Policy headers
-    res.set({
-        'Content-Security-Policy': "default-src 'self' https://apis.google.com https://accounts.google.com https://www.googleapis.com https://www.gstatic.com https://api.openai.com; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com; " +
-            "style-src 'self' 'unsafe-inline' https://www.gstatic.com; " +
-            "img-src 'self' data: https: blob: https://www.google.com; " +
-            "connect-src 'self' https://apis.google.com https://accounts.google.com https://www.googleapis.com https://www.gstatic.com https://api.openai.com https://www.google.com; " +
-            "frame-src https://accounts.google.com https://content.googleapis.com https://content-gmail.googleapis.com https://*.google.com;",
-        // Cache control headers
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
-        'Surrogate-Control': 'no-store'
-    });
-    next();
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  });
+  next();
 });
 
 // Add these middleware before your routes
@@ -52,23 +62,58 @@ app.use((req, res, next) => {
 // Make sure this comes after the MIME type middleware
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Add middleware to parse JSON
-app.use(express.json());
+// Add middleware to parse JSON with size limit
+app.use(express.json({ limit: '10mb' }));
 
-// Auth endpoint
+// Rate limiting - General API rate limiter
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter rate limiter for AI endpoints
+const aiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // Limit each IP to 30 AI requests per windowMs
+  message: 'Too many AI requests, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limiting to all API routes
+app.use('/api/', generalLimiter);
+
+// Basic authentication middleware - checks for Google OAuth token
+async function verifyAuth(req, res, next) {
+  // For now, we'll check if user has a valid session/token
+  // In production, verify Google OAuth token properly
+  const authHeader = req.headers.authorization;
+  const userEmail = req.headers['x-user-email'];
+  
+  // Basic check - in production, verify the Google token
+  if (authHeader || userEmail || req.headers.cookie?.includes('isAuthenticated')) {
+    return next();
+  }
+  
+  // For development, allow requests but log warning
+  // In production, uncomment the return below
+  // return res.status(401).json({ error: 'Unauthorized' });
+  
+  console.warn('API request without authentication:', req.path);
+  next();
+}
+
+// Auth endpoint - SECURED: No longer exposes OpenAI API key
 app.post('/api/auth', (req, res) => {
-    // Safely log partial key for debugging
-    const keyExists = !!process.env.OPENAI_API_KEY;
-    const keyPreview = keyExists 
-        ? `${process.env.OPENAI_API_KEY.substring(0, 7)}...${process.env.OPENAI_API_KEY.substring(process.env.OPENAI_API_KEY.length - 4)}`
-        : 'NOT FOUND';
-    
-    console.log('OpenAI API Key Status:', keyExists, 'Preview:', keyPreview);
-    
+    // Only return Google credentials needed for client-side OAuth
+    // OpenAI key stays on server
     res.json({
         clientId: process.env.GOOGLE_CLIENT_ID,
-        apiKey: process.env.GOOGLE_API_KEY,
-        openaiKey: process.env.OPENAI_API_KEY
+        apiKey: process.env.GOOGLE_API_KEY
+        // openaiKey removed - never expose this to client
     });
 });
 
@@ -82,12 +127,37 @@ app.get('/app', (req, res) => {
     res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
+// Input validation middleware
+const validateChatInput = [
+  body('message')
+    .trim()
+    .isLength({ min: 1, max: 10000 })
+    .withMessage('Message must be between 1 and 10000 characters'),
+  body('history')
+    .optional()
+    .isArray()
+    .withMessage('History must be an array'),
+  body('timestamp')
+    .optional()
+    .isISO8601()
+    .withMessage('Timestamp must be a valid ISO 8601 date'),
+];
+
 // Enhance the AI chat endpoint with stronger memory enforcement
-app.post('/api/chat', async (req, res) => {
+app.post('/api/chat', aiLimiter, verifyAuth, validateChatInput, async (req, res) => {
   try {
+    // Check validation results
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
     const { message, history, timestamp } = req.body;
     
-    if (!message) {
+    // Additional sanitization
+    const sanitizedMessage = message.trim().substring(0, 10000);
+    
+    if (!sanitizedMessage) {
       return res.status(400).json({ error: 'Message is required' });
     }
     
@@ -150,8 +220,8 @@ Best regards,
       ];
     }
     
-    // Add current message
-    messages.push({ role: 'user', content: message });
+    // Add current message (sanitized)
+    messages.push({ role: 'user', content: sanitizedMessage });
     
     // Use gpt-4 model for better memory if available, otherwise use gpt-3.5-turbo
     const model = 'gpt-3.5-turbo';
@@ -189,6 +259,69 @@ Best regards,
     
   } catch (error) {
     console.error('Error in chat endpoint:', error);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// New endpoint for AI email generation (replaces client-side OpenAI calls)
+const validateEmailGenInput = [
+  body('prompt')
+    .trim()
+    .isLength({ min: 1, max: 2000 })
+    .withMessage('Prompt must be between 1 and 2000 characters'),
+];
+
+app.post('/api/generate-email', aiLimiter, verifyAuth, validateEmailGenInput, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    
+    const { prompt } = req.body;
+    const sanitizedPrompt = prompt.trim().substring(0, 2000);
+    
+    if (!process.env.OPENAI_API_KEY) {
+      return res.status(500).json({ error: 'OpenAI API key not configured' });
+    }
+    
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [{
+            role: 'user',
+            content: `Help me write an email: ${sanitizedPrompt}`
+          }],
+          temperature: 0.7,
+          max_tokens: 1000
+        })
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OpenAI API error:', response.status, errorText);
+        return res.status(500).json({ error: 'Error calling OpenAI API' });
+      }
+      
+      const data = await response.json();
+      return res.json({
+        response: data.choices[0].message.content,
+        status: 'success'
+      });
+      
+    } catch (apiError) {
+      console.error('Error calling OpenAI API:', apiError);
+      return res.status(500).json({ error: 'Error processing your request' });
+    }
+    
+  } catch (error) {
+    console.error('Error in generate-email endpoint:', error);
     return res.status(500).json({ error: 'Server error' });
   }
 });

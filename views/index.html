@@ -13,10 +13,12 @@
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client" async></script>
     <script>
+        // SECURITY: Only expose Google credentials needed for OAuth
+        // OpenAI API key is handled server-side only
         window.ENV = {
             GOOGLE_CLIENT_ID: '<%= GOOGLE_CLIENT_ID %>',
-            GOOGLE_API_KEY: '<%= GOOGLE_API_KEY %>',
-            OPENAI_API_KEY: '<%= OPENAI_API_KEY %>'
+            GOOGLE_API_KEY: '<%= GOOGLE_API_KEY %>'
+            // OPENAI_API_KEY removed for security
         };
     </script>
     <script src="/js/main.js"></script>

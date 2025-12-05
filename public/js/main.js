@@ -427,8 +427,8 @@ function createSelectionToolbar() {
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest';
 const SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose';
 
-// OpenAI API key from environment variables
-let OPENAI_API_KEY;
+// OpenAI API key removed - now handled server-side only
+// No sensitive keys should be stored in client-side code
 let conversationHistory = [{
     role: "system",
     content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
@@ -471,13 +471,8 @@ async function initializeAPI() {
         CLIENT_ID = credentials.clientId;
         API_KEY = credentials.apiKey;
         
-        // Store the OpenAI API key properly
-        if (credentials.openaiKey) {
-            OPENAI_API_KEY = credentials.openaiKey;
-            console.log('OpenAI API key retrieved successfully');
-        } else {
-            console.warn('OpenAI API key not found in server response');
-        }
+        // OpenAI API key is no longer exposed to client
+        // All AI operations are handled server-side for security
         
         // Continue with Google API initialization
         gapi.load('client', async () => {
@@ -2416,25 +2411,24 @@ async function checkForAIHelp() {
         `;
         
         try {
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            // Use secure server endpoint instead of direct OpenAI API call
+            const response = await fetch('/api/generate-email', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: "gpt-3.5-turbo",
-                    messages: [{
-                        role: "user",
-                        content: `Help me write an email: ${prompt}`
-                    }],
-                    temperature: 0.7
+                    prompt: prompt
                 })
             });
 
+            if (!response.ok) {
+                throw new Error('Server error');
+            }
+
             const data = await response.json();
             document.getElementById('ai-suggestion-1').textContent = 
-                data.choices[0].message.content;
+                data.response || 'Error generating suggestion. Please try again.';
         } catch (error) {
             console.error('Error getting AI help:', error);
             document.getElementById('ai-suggestion-1').textContent = 
