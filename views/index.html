@@ -1043,6 +1043,10 @@
             right: 24px;
             width: 800px;
             height: 650px;
+            min-width: 400px;
+            min-height: 300px;
+            max-width: 95vw;
+            max-height: 95vh;
             background: white;
             z-index: 1000;
             border-radius: 8px 8px 0 0;
@@ -1050,11 +1054,92 @@
             transform: translateY(100%);
             transition: transform 0.3s ease, opacity 0.2s ease-in-out;
             opacity: 0;
+            resize: none; /* Disable default browser resize */
+        }
+        
+        /* Resize handles */
+        .modal-resize-handle {
+            position: absolute;
+            background: transparent;
+            z-index: 1001;
+        }
+        
+        .modal-resize-handle.right {
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: ew-resize;
+        }
+        
+        .modal-resize-handle.bottom {
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            cursor: ns-resize;
+        }
+        
+        .modal-resize-handle.corner {
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+        }
+        
+        .modal-resize-handle.top-left {
+            top: 0;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-resize-handle.top-left::before {
+            content: '⇱';
+            font-size: 12px;
+            color: #1a73e8;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .modal-resize-handle.top-left:hover::before {
+            opacity: 1;
+        }
+        
+        .modal-resize-handle.top-left.dragging::before {
+            opacity: 1;
+            color: #1557b0;
+        }
+        
+        .modal-resize-handle:hover {
+            background: rgba(26, 115, 232, 0.2);
+        }
+        
+        .modal-resize-handle.dragging {
+            background: rgba(26, 115, 232, 0.4);
+        }
+        
+        .modal.minimized .modal-resize-handle {
+            display: none;
+        }
+        
+        /* Modal header - not draggable, stays locked to right */
+        .modal-header {
+            cursor: default;
         }
         
         .modal.show {
             transform: translateY(0);
             opacity: 1;
+        }
+        
+        .modal.show.resizing {
+            transition: none; /* Disable transition during resize for smooth dragging */
         }
         
         .modal-open {
@@ -2732,6 +2817,10 @@
         </a>
     </div>
     <div id="compose-modal" class="modal" style="display: none;">
+        <!-- Resize handles -->
+        <div class="modal-resize-handle bottom" id="modal-resize-bottom"></div>
+        <div class="modal-resize-handle corner" id="modal-resize-corner"></div>
+        <div class="modal-resize-handle top-left" id="modal-resize-top-left"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <div class="modal-header-left">

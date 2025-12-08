@@ -2319,6 +2319,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize resize divider
     initializeResizeDivider();
+    
+    // Initialize modal resize handles
+    initializeModalResize();
 });
 
 // Function to initialize the resize divider
@@ -2375,6 +2378,165 @@ function initializeResizeDivider() {
             localStorage.setItem('emailListWidth', currentWidth);
         }
     });
+}
+
+// Function to initialize modal resize handles
+function initializeModalResize() {
+    const modal = document.getElementById('compose-modal');
+    if (!modal) return;
+    
+    const resizeBottom = document.getElementById('modal-resize-bottom');
+    const resizeCorner = document.getElementById('modal-resize-corner');
+    const resizeTopLeft = document.getElementById('modal-resize-top-left');
+    
+    if (!resizeBottom || !resizeCorner || !resizeTopLeft) return;
+    
+    let isResizing = false;
+    let resizeType = null; // 'width', 'height', 'both', or 'top-left'
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let startRight = 0;
+    let startBottom = 0;
+    
+    // Restore saved size (position stays locked to right/bottom)
+    const savedWidth = localStorage.getItem('composeModalWidth');
+    const savedHeight = localStorage.getItem('composeModalHeight');
+    
+    if (savedWidth && savedHeight) {
+        modal.style.width = savedWidth + 'px';
+        modal.style.height = savedHeight + 'px';
+    }
+    
+    // Always keep modal locked to right and bottom
+    modal.style.right = '24px';
+    modal.style.bottom = '0';
+    modal.style.left = 'auto';
+    modal.style.top = 'auto';
+    
+    function startResize(e, type) {
+        if (modal.classList.contains('minimized')) return;
+        
+        isResizing = true;
+        resizeType = type;
+        startX = e.clientX;
+        startY = e.clientY;
+        startWidth = modal.offsetWidth;
+        startHeight = modal.offsetHeight;
+        
+        // For top-left resize, we need to track position too
+        if (type === 'top-left') {
+            const rect = modal.getBoundingClientRect();
+            startRight = window.innerWidth - rect.right;
+            startBottom = window.innerHeight - rect.bottom;
+        }
+        
+        // Disable transitions during resize
+        modal.classList.add('resizing');
+        
+        document.body.style.cursor = type === 'width' ? 'ew-resize' : type === 'height' ? 'ns-resize' : 'nwse-resize';
+        document.body.style.userSelect = 'none';
+        
+        if (resizeBottom) resizeBottom.classList.add('dragging');
+        if (resizeCorner) resizeCorner.classList.add('dragging');
+        if (resizeTopLeft) resizeTopLeft.classList.add('dragging');
+        
+        e.preventDefault();
+    }
+    
+    // Removed drag functionality - modal stays locked to right side
+    
+    function handleResize(e) {
+        if (!isResizing) return;
+        
+        const deltaX = e.clientX - startX;
+        const deltaY = e.clientY - startY;
+        
+        // Only allow top-left resize - keep right and bottom edges fixed
+        if (resizeType === 'top-left') {
+            // Calculate new dimensions
+            // Dragging left (negative deltaX) = expand width
+            // Dragging right (positive deltaX) = shrink width
+            // Dragging up (negative deltaY) = expand height
+            // Dragging down (positive deltaY) = shrink height
+            let newWidth = startWidth - deltaX;
+            let newHeight = startHeight - deltaY;
+            
+            // Apply constraints
+            const minWidth = parseInt(getComputedStyle(modal).minWidth) || 400;
+            const minHeight = parseInt(getComputedStyle(modal).minHeight) || 300;
+            const maxWidth = parseInt(getComputedStyle(modal).maxWidth) || window.innerWidth * 0.95;
+            const maxHeight = parseInt(getComputedStyle(modal).maxHeight) || window.innerHeight * 0.95;
+            
+            newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+            newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+            
+            // Apply the new size - right and bottom stay fixed automatically
+            modal.style.width = newWidth + 'px';
+            modal.style.height = newHeight + 'px';
+            modal.style.right = '24px';
+            modal.style.bottom = '0';
+            modal.style.left = 'auto';
+            modal.style.top = 'auto';
+            
+            return;
+        }
+        
+        // Disable other resize types - only top-left is allowed
+        // But keep the code for right/bottom/bottom-right in case we want to re-enable later
+        if (resizeType === 'width' || resizeType === 'both') {
+            let newWidth = startWidth - deltaX; // Subtract because we're resizing from right
+            const minWidth = parseInt(getComputedStyle(modal).minWidth) || 400;
+            const maxWidth = parseInt(getComputedStyle(modal).maxWidth) || window.innerWidth * 0.95;
+            newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+            modal.style.width = newWidth + 'px';
+        }
+        
+        if (resizeType === 'height' || resizeType === 'both') {
+            let newHeight = startHeight - deltaY; // Subtract because we're resizing from bottom
+            const minHeight = parseInt(getComputedStyle(modal).minHeight) || 300;
+            const maxHeight = parseInt(getComputedStyle(modal).maxHeight) || window.innerHeight * 0.95;
+            newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+            modal.style.height = newHeight + 'px';
+        }
+    }
+    
+    function stopResize() {
+        if (!isResizing) return;
+        
+        isResizing = false;
+        modal.classList.remove('resizing');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        
+        if (resizeBottom) resizeBottom.classList.remove('dragging');
+        if (resizeCorner) resizeCorner.classList.remove('dragging');
+        if (resizeTopLeft) resizeTopLeft.classList.remove('dragging');
+        
+        // Save size to localStorage
+        localStorage.setItem('composeModalWidth', modal.offsetWidth);
+        localStorage.setItem('composeModalHeight', modal.offsetHeight);
+    }
+    
+    // Add event listeners for resize handles (only top-left, bottom, and bottom-right)
+    if (resizeBottom) {
+        resizeBottom.addEventListener('mousedown', (e) => startResize(e, 'height'));
+    }
+    
+    if (resizeCorner) {
+        resizeCorner.addEventListener('mousedown', (e) => startResize(e, 'both'));
+    }
+    
+    if (resizeTopLeft) {
+        resizeTopLeft.addEventListener('mousedown', (e) => startResize(e, 'top-left'));
+    }
+    
+    // Modal header is not draggable - modal stays locked to right side
+    
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+    document.addEventListener('mouseleave', stopResize);
 }
 
 // Helper function to check if emails have changed
