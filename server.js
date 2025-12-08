@@ -28,11 +28,11 @@ app.set('view engine', 'html');
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'", "https://apis.google.com", "https://accounts.google.com", "https://www.googleapis.com", "https://www.gstatic.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com", "https://accounts.google.com", "https://www.gstatic.com"],
+      defaultSrc: ["'self'", "https://apis.google.com", "https://accounts.google.com", "https://www.googleapis.com", "https://www.gstatic.com", "https://www.googletagmanager.com", "https://*.google-analytics.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://apis.google.com", "https://accounts.google.com", "https://www.gstatic.com", "https://www.googletagmanager.com", "https://*.googletagmanager.com"],
       styleSrc: ["'self'", "'unsafe-inline'", "https://www.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com"],
-      connectSrc: ["'self'", "https://apis.google.com", "https://accounts.google.com", "https://www.googleapis.com", "https://www.gstatic.com", "https://api.openai.com", "https://www.google.com"],
+      imgSrc: ["'self'", "data:", "https:", "blob:", "https://www.google.com", "https://www.google-analytics.com", "https://*.google-analytics.com"],
+      connectSrc: ["'self'", "https://apis.google.com", "https://accounts.google.com", "https://www.googleapis.com", "https://www.gstatic.com", "https://api.openai.com", "https://www.google.com", "https://www.google-analytics.com", "https://*.google-analytics.com", "https://www.googletagmanager.com", "https://*.googletagmanager.com"],
       frameSrc: ["https://accounts.google.com", "https://content.googleapis.com", "https://content-gmail.googleapis.com", "https://*.google.com"],
     },
   },
