@@ -340,6 +340,9 @@
             position: relative;
             margin: 0 20px;
             height: calc(100vh - 200px);
+            
+            /* Isolate email list from email viewer to prevent style leakage */
+            isolation: isolate;
         }
 
         .email-list {
@@ -357,6 +360,19 @@
             display: flex;
             flex-direction: column;
             transition: width 0.1s ease;
+            
+            /* Isolate email list from email viewer backgrounds */
+            isolation: isolate;
+            contain: layout style paint;
+            position: relative;
+            z-index: 0;
+            color: #202124 !important; /* Force explicit color */
+            color-scheme: light !important; /* Force light color scheme */
+        }
+        
+        /* Ensure all text in email list maintains explicit colors */
+        .email-list * {
+            color-scheme: light !important;
         }
 
         /* When email viewer is hidden, email list takes full width */
@@ -404,6 +420,19 @@
             height: 40px;
             box-sizing: border-box;
             position: relative;  /* Add this to help with toolbar positioning */
+            color: #202124 !important; /* Force explicit color to prevent inheritance from email content */
+        }
+        
+        /* Force explicit colors on all email list text to prevent inheritance */
+        .email-item * {
+            color: inherit !important;
+        }
+        
+        .email-item .email-sender,
+        .email-item .email-subject,
+        .email-item .email-snippet,
+        .email-item .email-date {
+            color: #202124 !important;
         }
 
         .email-item:hover {
@@ -435,6 +464,7 @@
             min-width: 140px;
             max-width: 140px;
             margin: 0;
+            color: #202124 !important; /* Force explicit color to prevent inheritance */
         }
 
         .email-subject {
@@ -444,6 +474,7 @@
             flex: 0 1 auto;
             margin: 0;
             min-width: 0;
+            color: #202124 !important; /* Force explicit color to prevent inheritance */
         }
 
         .email-snippet {
@@ -629,6 +660,12 @@
             flex-direction: column;
             overflow: hidden;
             height: 100%;
+            
+            /* Hard containment: Prevent email backgrounds/images from bleeding out */
+            isolation: isolate;
+            contain: layout style paint;
+            clip-path: inset(0);
+            color-scheme: light !important; /* Force light color scheme */
         }
 
         .email-viewer[style*="display: flex"],
@@ -694,7 +731,19 @@
             width: 100%;
             flex: 1;
             min-height: 0;
-            contain: content;
+            
+            /* Strong containment: Prevent background images/colors from bleeding */
+            contain: layout style paint;
+            clip-path: inset(0);
+            color-scheme: light !important; /* Force light color scheme */
+        }
+        
+        /* Additional wrapper to ensure strict containment - allow vertical scroll */
+        .email-content-wrapper > * {
+            overflow-x: hidden !important;
+            overflow-y: visible;
+            contain: layout style paint;
+            max-width: 100%;
         }
 
         #email-viewer-content {
@@ -702,6 +751,22 @@
             overflow-y: auto;
             overflow-x: hidden;
             min-height: 0;
+            
+            /* Contain email content and clip backgrounds */
+            contain: layout style paint;
+            position: relative;
+            background: white !important;
+            color: #202124 !important; /* Force explicit color */
+            isolation: isolate;
+            clip-path: inset(0);
+            color-scheme: light !important; /* Force light color scheme */
+        }
+        
+        /* Force all children to respect container bounds */
+        #email-viewer-content > * {
+            overflow: hidden !important;
+            contain: layout style paint;
+            position: relative;
         }
 
         .email-full-body {
@@ -749,22 +814,64 @@
             box-sizing: border-box;
         }
         
-        /* Override dark backgrounds in emails for readability */
+        /* Override dark backgrounds in emails - but keep dark background and use white text */
         .message-content div[style*="background-color: black"],
         .message-content div[style*="background-color:#000"],
         .message-content div[style*="background-color: #000"],
         .message-content div[style*="background: black"],
         .message-content div[style*="background:#000"],
-        .message-content div[style*="background: #000"] {
-            background-color: white !important;
-            color: #202124 !important;
+        .message-content div[style*="background: #000"],
+        .message-content table[style*="background-color: black"],
+        .message-content table[style*="background-color:#000"],
+        .message-content table[style*="background-color: #000"],
+        .message-content table[style*="background: black"],
+        .message-content table[style*="background:#000"],
+        .message-content table[style*="background: #000"],
+        .message-content td[style*="background-color: black"],
+        .message-content td[style*="background-color:#000"],
+        .message-content td[style*="background-color: #000"],
+        .message-content td[style*="background: black"],
+        .message-content td[style*="background:#000"],
+        .message-content td[style*="background: #000"] {
+            color: #ffffff !important;
         }
         
-        .message-content *[style*="color: white"],
-        .message-content *[style*="color:white"],
-        .message-content *[style*="color:#fff"],
-        .message-content *[style*="color: #fff"] {
-            color: #202124 !important;
+        /* Force white text on all children of dark background elements */
+        .message-content div[style*="background-color: black"] *,
+        .message-content div[style*="background-color:#000"] *,
+        .message-content div[style*="background-color: #000"] *,
+        .message-content div[style*="background: black"] *,
+        .message-content div[style*="background:#000"] *,
+        .message-content div[style*="background: #000"] *,
+        .message-content table[style*="background-color: black"] *,
+        .message-content table[style*="background-color:#000"] *,
+        .message-content table[style*="background-color: #000"] *,
+        .message-content table[style*="background: black"] *,
+        .message-content table[style*="background:#000"] *,
+        .message-content table[style*="background: #000"] *,
+        .message-content td[style*="background-color: black"] *,
+        .message-content td[style*="background-color:#000"] *,
+        .message-content td[style*="background-color: #000"] *,
+        .message-content td[style*="background: black"] *,
+        .message-content td[style*="background:#000"] *,
+        .message-content td[style*="background: #000"] * {
+            color: #ffffff !important;
+        }
+        
+        /* Light blue links on dark backgrounds for visibility */
+        .message-content div[style*="background-color: black"] a,
+        .message-content div[style*="background-color:#000"] a,
+        .message-content div[style*="background-color: #000"] a,
+        .message-content div[style*="background: black"] a,
+        .message-content div[style*="background:#000"] a,
+        .message-content div[style*="background: #000"] a,
+        .message-content table[style*="background-color: black"] a,
+        .message-content table[style*="background-color:#000"] a,
+        .message-content table[style*="background-color: #000"] a,
+        .message-content table[style*="background: black"] a,
+        .message-content table[style*="background:#000"] a,
+        .message-content table[style*="background: #000"] a {
+            color: #8ab4f8 !important; /* Light blue for links on dark backgrounds */
         }
         
         /* Better spacing for email content */

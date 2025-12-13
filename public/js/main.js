@@ -1184,6 +1184,15 @@ async function openEmail(emailId) {
             .thread-container {
                 padding: 0;
                 background: white;
+                color: #202124 !important; /* Force explicit color */
+                
+                /* Contain thread content to prevent background leakage */
+                contain: layout style paint;
+                position: relative;
+                isolation: isolate;
+                overflow: hidden !important;
+                clip-path: inset(0);
+                color-scheme: light !important;
             }
 
             .email-message {
@@ -1191,6 +1200,14 @@ async function openEmail(emailId) {
                 padding: 20px 24px;
                 border-bottom: 1px solid #eceff1;
                 background: white;
+                color: #202124 !important; /* Force explicit color */
+                
+                /* Contain each message to prevent background leakage */
+                contain: layout style paint;
+                position: relative;
+                isolation: isolate;
+                overflow: hidden;
+                color-scheme: light !important;
             }
 
             .email-message:last-child {
@@ -1228,13 +1245,194 @@ async function openEmail(emailId) {
                 font-family: Arial, Helvetica, sans-serif;
                 font-size: 14px;
                 line-height: 1.6;
-                color: #202124;
+                color: #202124 !important; /* Force explicit color */
                 max-width: 100%;
                 overflow-x: auto;
+                overflow-y: visible;
                 word-wrap: break-word;
                 padding: 0;
                 margin-top: 16px;
                 /* Don't set text-align here - let email HTML control it */
+                
+                /* Hard containment: Prevent background images/colors from bleeding */
+                position: relative;
+                isolation: isolate;
+                contain: layout style paint;
+                clip-path: inset(0);
+                background: white !important;
+                
+                /* Force light color scheme */
+                color-scheme: light !important;
+            }
+            
+            /* Force explicit colors on all email content to prevent inheritance */
+            .message-content * {
+                color: inherit;
+            }
+            
+            /* Override any dark colors in email content - default to dark text */
+            .message-content p,
+            .message-content div,
+            .message-content span,
+            .message-content td,
+            .message-content th {
+                color: #202124 !important;
+            }
+            
+            /* Force white/light text on dark backgrounds */
+            .message-content div[style*="background-color: black"],
+            .message-content div[style*="background-color:#000"],
+            .message-content div[style*="background-color: #000"],
+            .message-content div[style*="background: black"],
+            .message-content div[style*="background:#000"],
+            .message-content div[style*="background: #000"],
+            .message-content div[style*="background-color: rgb(0, 0, 0)"],
+            .message-content div[style*="background-color:rgb(0,0,0)"],
+            .message-content div[style*="background-color: rgba(0, 0, 0"],
+            .message-content div[style*="background-color:rgba(0,0,0"],
+            .message-content table[style*="background-color: black"],
+            .message-content table[style*="background-color:#000"],
+            .message-content table[style*="background-color: #000"],
+            .message-content table[style*="background: black"],
+            .message-content table[style*="background:#000"],
+            .message-content table[style*="background: #000"],
+            .message-content td[style*="background-color: black"],
+            .message-content td[style*="background-color:#000"],
+            .message-content td[style*="background-color: #000"],
+            .message-content td[style*="background: black"],
+            .message-content td[style*="background:#000"],
+            .message-content td[style*="background: #000"],
+            .message-content tr[style*="background-color: black"],
+            .message-content tr[style*="background-color:#000"],
+            .message-content tr[style*="background-color: #000"],
+            .message-content tr[style*="background: black"],
+            .message-content tr[style*="background:#000"],
+            .message-content tr[style*="background: #000"],
+            .message-content [style*="background-color: black"],
+            .message-content [style*="background-color:#000"],
+            .message-content [style*="background-color: #000"],
+            .message-content [style*="background: black"],
+            .message-content [style*="background:#000"],
+            .message-content [style*="background: #000"] {
+                color: #ffffff !important;
+            }
+            
+            /* Force white text on all children of dark background elements */
+            .message-content div[style*="background-color: black"] *,
+            .message-content div[style*="background-color:#000"] *,
+            .message-content div[style*="background-color: #000"] *,
+            .message-content div[style*="background: black"] *,
+            .message-content div[style*="background:#000"] *,
+            .message-content div[style*="background: #000"] *,
+            .message-content table[style*="background-color: black"] *,
+            .message-content table[style*="background-color:#000"] *,
+            .message-content table[style*="background-color: #000"] *,
+            .message-content table[style*="background: black"] *,
+            .message-content table[style*="background:#000"] *,
+            .message-content table[style*="background: #000"] *,
+            .message-content td[style*="background-color: black"] *,
+            .message-content td[style*="background-color:#000"] *,
+            .message-content td[style*="background-color: #000"] *,
+            .message-content td[style*="background: black"] *,
+            .message-content td[style*="background:#000"] *,
+            .message-content td[style*="background: #000"] *,
+            .message-content tr[style*="background-color: black"] *,
+            .message-content tr[style*="background-color:#000"] *,
+            .message-content tr[style*="background-color: #000"] *,
+            .message-content tr[style*="background: black"] *,
+            .message-content tr[style*="background:#000"] *,
+            .message-content tr[style*="background: #000"] * {
+                color: #ffffff !important;
+            }
+            
+            /* Also handle very dark backgrounds (dark gray, etc.) - detect by checking for rgb values with low brightness */
+            .message-content [style*="background-color: rgb(0"],
+            .message-content [style*="background-color:rgb(0"],
+            .message-content [style*="background-color: rgba(0"],
+            .message-content [style*="background-color:rgba(0"],
+            .message-content [style*="background-color: #111"],
+            .message-content [style*="background-color:#111"],
+            .message-content [style*="background-color: #222"],
+            .message-content [style*="background-color:#222"],
+            .message-content [style*="background-color: #333"],
+            .message-content [style*="background-color:#333"] {
+                color: #ffffff !important;
+            }
+            
+            /* Force white text on children of very dark backgrounds */
+            .message-content [style*="background-color: rgb(0"] *,
+            .message-content [style*="background-color:rgb(0"] *,
+            .message-content [style*="background-color: rgba(0"] *,
+            .message-content [style*="background-color:rgba(0"] *,
+            .message-content [style*="background-color: #111"] *,
+            .message-content [style*="background-color:#111"] *,
+            .message-content [style*="background-color: #222"] *,
+            .message-content [style*="background-color:#222"] *,
+            .message-content [style*="background-color: #333"] *,
+            .message-content [style*="background-color:#333"] * {
+                color: #ffffff !important;
+            }
+            
+            /* Allow links on dark backgrounds to be light blue for visibility */
+            .message-content div[style*="background-color: black"] a,
+            .message-content div[style*="background-color:#000"] a,
+            .message-content div[style*="background-color: #000"] a,
+            .message-content div[style*="background: black"] a,
+            .message-content div[style*="background:#000"] a,
+            .message-content div[style*="background: #000"] a,
+            .message-content table[style*="background-color: black"] a,
+            .message-content table[style*="background-color:#000"] a,
+            .message-content table[style*="background-color: #000"] a,
+            .message-content table[style*="background: black"] a,
+            .message-content table[style*="background:#000"] a,
+            .message-content table[style*="background: #000"] a {
+                color: #8ab4f8 !important; /* Light blue for links on dark backgrounds */
+            }
+            
+            /* Allow links to keep their color on light backgrounds */
+            .message-content a {
+                color: #1a73e8 !important;
+            }
+            
+            /* Clip all background images to the message content area */
+            .message-content * {
+                background-clip: padding-box !important;
+                background-origin: padding-box !important;
+                background-attachment: scroll !important;
+            }
+            
+            /* Override background-attachment: fixed which can escape containers */
+            .message-content *[style*="background-attachment"],
+            .message-content *[style*="background-attachment: fixed"],
+            .message-content *[style*="background-attachment:fixed"] {
+                background-attachment: scroll !important;
+            }
+            
+            /* Ensure background images don't extend beyond content */
+            .message-content img,
+            .message-content [style*="background-image"],
+            .message-content [style*="background:"] {
+                max-width: 100%;
+                display: block;
+            }
+            
+            /* Force clip-path on all elements to prevent background bleeding */
+            .message-content > * {
+                clip-path: inset(0);
+                overflow: hidden;
+            }
+            
+            /* Ensure fixed/absolute positioned elements don't escape */
+            .message-content [style*="position: fixed"],
+            .message-content [style*="position:absolute"],
+            .message-content [style*="position: absolute"] {
+                position: relative !important;
+            }
+            
+            /* Prevent any element from extending beyond message-content */
+            .message-content * {
+                max-width: 100%;
+                box-sizing: border-box;
             }
             
             /* Ensure email content preserves original styling but is readable */
@@ -1658,6 +1856,18 @@ async function openEmail(emailId) {
                 ${threadHtml}
             </div>
         `;
+        
+        // Fix dark backgrounds with white text after content is inserted
+        // Run multiple times to catch all elements, including dynamically loaded ones
+        setTimeout(() => {
+            fixDarkBackgroundText();
+        }, 100);
+        setTimeout(() => {
+            fixDarkBackgroundText();
+        }, 500);
+        setTimeout(() => {
+            fixDarkBackgroundText();
+        }, 1000);
 
     } catch (error) {
         console.error('Error opening email:', error);
@@ -1676,6 +1886,106 @@ async function openEmail(emailId) {
             `;
         }
     }
+}
+
+// Function to detect dark backgrounds and apply white text
+function fixDarkBackgroundText() {
+    const messageContents = document.querySelectorAll('.message-content');
+    
+    messageContents.forEach(messageContent => {
+        // Get all elements within message content, including the message-content itself
+        const allElements = [messageContent, ...messageContent.querySelectorAll('*')];
+        
+        allElements.forEach(element => {
+            // Skip if it's a link (links have special handling)
+            if (element.tagName === 'A') {
+                // Check if link is on dark background
+                const parent = element.parentElement;
+                if (parent) {
+                    const parentBg = window.getComputedStyle(parent).backgroundColor;
+                    const rgb = parentBg.match(/\d+/g);
+                    if (rgb && rgb.length >= 3) {
+                        const r = parseInt(rgb[0]);
+                        const g = parseInt(rgb[1]);
+                        const b = parseInt(rgb[2]);
+                        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                        if (brightness < 128) {
+                            element.style.setProperty('color', '#8ab4f8', 'important');
+                        }
+                    }
+                }
+                return;
+            }
+            
+            // Get computed background color
+            const computedStyle = window.getComputedStyle(element);
+            const bgColor = computedStyle.backgroundColor;
+            
+            // Check if background color is dark
+            if (bgColor && bgColor !== 'rgba(0, 0, 0, 0)' && bgColor !== 'transparent') {
+                const rgb = bgColor.match(/\d+/g);
+                if (rgb && rgb.length >= 3) {
+                    const r = parseInt(rgb[0]);
+                    const g = parseInt(rgb[1]);
+                    const b = parseInt(rgb[2]);
+                    
+                    // Calculate brightness (using relative luminance formula)
+                    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                    
+                    // If background is dark (brightness < 128), make text white
+                    if (brightness < 128) {
+                        // Force white text on this element
+                        element.style.setProperty('color', '#ffffff', 'important');
+                        
+                        // Also apply to all direct text children (p, span, div, td, th, etc.)
+                        const textChildren = element.querySelectorAll('p, span, div, td, th, h1, h2, h3, h4, h5, h6, li, label');
+                        textChildren.forEach(child => {
+                            if (child.tagName !== 'A') {
+                                child.style.setProperty('color', '#ffffff', 'important');
+                            }
+                        });
+                    }
+                }
+            }
+            
+            // Also check inline style attribute for background colors
+            const inlineStyle = element.getAttribute('style') || '';
+            if (inlineStyle) {
+                // Check for black/dark backgrounds in inline styles
+                const darkBgPatterns = [
+                    /background[^:;]*:\s*(?:black|#000|#000000|rgb\s*\(\s*0\s*,\s*0\s*,\s*0\s*\)|rgba\s*\(\s*0\s*,\s*0\s*,\s*0\s*)/i,
+                    /background[^:;]*:\s*#(?:000|111|222|333|444|555|666)/i,
+                    /background[^:;]*:\s*rgb\s*\(\s*([0-2]?\d|1[0-2]\d)\s*,\s*([0-2]?\d|1[0-2]\d)\s*,\s*([0-2]?\d|1[0-2]\d)\s*\)/i
+                ];
+                
+                const hasDarkBg = darkBgPatterns.some(pattern => {
+                    const match = inlineStyle.match(pattern);
+                    if (match && match[1] && match[2] && match[3]) {
+                        // Check if RGB values are all low (dark)
+                        const r = parseInt(match[1]);
+                        const g = parseInt(match[2]);
+                        const b = parseInt(match[3]);
+                        return (r + g + b) < 384; // Sum less than 384 means dark
+                    }
+                    return match !== null;
+                });
+                
+                if (hasDarkBg) {
+                    element.style.setProperty('color', '#ffffff', 'important');
+                    
+                    // Apply to text children
+                    const textChildren = element.querySelectorAll('p, span, div, td, th, h1, h2, h3, h4, h5, h6, li, label');
+                    textChildren.forEach(child => {
+                        if (child.tagName !== 'A') {
+                            child.style.setProperty('color', '#ffffff', 'important');
+                        } else {
+                            child.style.setProperty('color', '#8ab4f8', 'important');
+                        }
+                    });
+                }
+            }
+        });
+    });
 }
 
 function closeEmail() {
@@ -3498,12 +3808,25 @@ function decodeEmailContent(data) {
         // - strip scripts
         // - strip inline event handlers
         // - strip javascript: URLs
+        // - strip color-scheme and color-related meta tags
         // Layout and sizing are handled via CSS instead of rewriting tags here.
-        const sanitized = htmlContent
+        let sanitized = htmlContent
             .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
             .replace(/on\w+="[^"]*"/gi, '')
             .replace(/on\w+='[^']*'/gi, '')
             .replace(/javascript:/gi, '');
+        
+        // Strip color-scheme and dark mode meta tags
+        sanitized = sanitized
+            .replace(/<meta[^>]*name=["']color-scheme["'][^>]*>/gi, '')
+            .replace(/<meta[^>]*name=["']theme-color["'][^>]*>/gi, '')
+            .replace(/<meta[^>]*name=["']prefers-color-scheme["'][^>]*>/gi, '')
+            .replace(/<meta[^>]*content=["'][^"]*color-scheme[^"]*["'][^>]*>/gi, '');
+        
+        // Strip color-scheme from HTML/body/style tags
+        sanitized = sanitized
+            .replace(/<html[^>]*color-scheme[^>]*>/gi, (match) => match.replace(/\s*color-scheme\s*=\s*["'][^"']*["']/gi, ''))
+            .replace(/<body[^>]*color-scheme[^>]*>/gi, (match) => match.replace(/\s*color-scheme\s*=\s*["'][^"']*["']/gi, ''));
         
         // Debug: Log if we have HTML content
         if (sanitized.includes('<')) {
