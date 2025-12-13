@@ -707,9 +707,9 @@
         .email-full-body {
             background: white !important;
             color: #202124 !important;
-            font-family: 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+            font-family: 'Segoe UI', Arial, sans-serif;
             line-height: 1.6;
-            padding: 20px;
+            padding: 0;
             overflow-x: auto;
             width: 100%;
             box-sizing: border-box;
@@ -742,34 +742,88 @@
         .email-full-body a:hover {
             text-decoration: underline;
         }
+        
+        /* Ensure email content is readable */
+        .message-content * {
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        
+        /* Override dark backgrounds in emails for readability */
+        .message-content div[style*="background-color: black"],
+        .message-content div[style*="background-color:#000"],
+        .message-content div[style*="background-color: #000"],
+        .message-content div[style*="background: black"],
+        .message-content div[style*="background:#000"],
+        .message-content div[style*="background: #000"] {
+            background-color: white !important;
+            color: #202124 !important;
+        }
+        
+        .message-content *[style*="color: white"],
+        .message-content *[style*="color:white"],
+        .message-content *[style*="color:#fff"],
+        .message-content *[style*="color: #fff"] {
+            color: #202124 !important;
+        }
+        
+        /* Better spacing for email content */
+        .message-content {
+            padding: 0;
+        }
+        
+        .message-content > *:first-child {
+            margin-top: 0;
+        }
+        
+        .message-content > *:last-child {
+            margin-bottom: 0;
+        }
 
         .email-full-header {
-            padding: 12px 16px;
+            padding: 20px 24px 16px 24px;
             border-bottom: 1px solid #eceff1;
-            max-width: 95%;
-            margin: 0 auto;
+            background: white;
         }
 
         .email-full-subject {
-            font-size: 24px;
-            margin-bottom: 16px;
+            font-size: 22px;
+            font-weight: 400;
+            margin: 0 0 16px 0;
+            color: #202124;
+            line-height: 1.4;
+            font-family: 'Google Sans', Arial, sans-serif;
         }
 
         .email-full-metadata {
             color: #5f6368;
-            font-size: 14px;
+            font-size: 13px;
+            margin-bottom: 0;
+            line-height: 1.6;
+            font-family: Arial, sans-serif;
+        }
+        
+        .email-full-metadata-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
             margin-bottom: 8px;
         }
-
-        .email-full-subject {
-            font-size: 1.5em;
-            margin-bottom: 10px;
-            color: #202124;
+        
+        .email-full-metadata-row:last-child {
+            margin-bottom: 0;
         }
-
-        .email-full-metadata {
+        
+        .email-full-metadata-label {
             color: #5f6368;
-            font-size: 0.9em;
+            font-weight: 500;
+            min-width: 50px;
+            flex-shrink: 0;
+        }
+        
+        .email-full-metadata-value {
+            color: #202124;
+            flex: 1;
         }
 
         /* Add styles for email attachments */
@@ -2942,94 +2996,107 @@
         // Modify moveToCompose to use our hidden textarea instead
         const originalMoveEmailToCompose = moveEmailToCompose;
         window.moveEmailToCompose = function(emailContent) {
-            console.log("moveEmailToCompose called with:", 
-                typeof emailContent === 'string' 
-                ? emailContent.substring(0, 50) + "..." 
-                : emailContent);
+            try {
+                console.log("moveEmailToCompose called with:", 
+                    typeof emailContent === 'string' 
+                    ? emailContent.substring(0, 50) + "..." 
+                    : emailContent);
+                    
+                // Extract subject and body from the email content
+                let subject = '';
+                let body = '';
                 
-            // Extract subject and body from the email content
-            let subject = '';
-            let body = '';
-            
-            if (typeof emailContent === 'string') {
-                body = emailContent;
+                if (typeof emailContent === 'string') {
+                    body = emailContent;
+                    
+                    // Try to extract subject line
+                    const subjectPatterns = [
+                        /Subject:(.+?)(?:\n|$)/i,
+                        /Subject line:(.+?)(?:\n|$)/i,
+                        /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
+                        /^RE:(.+?)(?:\n|$)/i,
+                        /^Re:(.+?)(?:\n|$)/i,
+                        /^FWD:(.+?)(?:\n|$)/i,
+                        /^Fwd:(.+?)(?:\n|$)/i
+                    ];
+                    
+                    // Try each pattern to extract subject
+                    for (const pattern of subjectPatterns) {
+                        const match = emailContent.match(pattern);
+                        if (match && match[1]) {
+                            subject = match[1].trim();
+                            console.log("Subject extracted:", subject);
+                            // Remove the subject line from the body
+                            body = body.replace(pattern, '').trim();
+                            break;
+                        }
+                    }
+                    
+                    // If we still don't have a subject, look for the first line
+                    if (!subject && body.includes('\n')) {
+                        const firstLine = body.split('\n')[0].trim();
+                        // If the first line is short and doesn't look like a greeting, it might be a subject
+                        if (firstLine.length < 80 && 
+                            !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
+                            subject = firstLine;
+                            console.log("First line as subject:", subject);
+                            body = body.substring(firstLine.length).trim();
+                        }
+                    }
+                } else if (emailContent && typeof emailContent === 'object') {
+                    // It's an object
+                    subject = emailContent.subject || '';
+                    body = emailContent.body || '';
+                }
                 
-                // Try to extract subject line
-                const subjectPatterns = [
-                    /Subject:(.+?)(?:\n|$)/i,
-                    /Subject line:(.+?)(?:\n|$)/i,
-                    /^(?:.*?)Subject:(.+?)(?:\n|$)/im,
-                    /^RE:(.+?)(?:\n|$)/i,
-                    /^Re:(.+?)(?:\n|$)/i,
-                    /^FWD:(.+?)(?:\n|$)/i,
-                    /^Fwd:(.+?)(?:\n|$)/i
-                ];
+                // Open compose modal
+                const modal = document.getElementById('compose-modal');
+                if (!modal) {
+                    console.error("Compose modal not found");
+                    return false;
+                }
                 
-                // Try each pattern to extract subject
-                for (const pattern of subjectPatterns) {
-                    const match = emailContent.match(pattern);
-                    if (match && match[1]) {
-                        subject = match[1].trim();
-                        console.log("Subject extracted:", subject);
-                        // Remove the subject line from the body
-                        body = body.replace(pattern, '').trim();
-                        break;
+                modal.style.display = 'block';
+                document.body.classList.add('modal-open');
+                setTimeout(() => modal.classList.add('show'), 10);
+                
+                // Update fields
+                const subjectField = document.getElementById('compose-subject');
+                const bodyField = document.getElementById('compose-body');
+                
+                if (subjectField) subjectField.value = subject;
+                
+                if (bodyField) {
+                    if (bodyField.getAttribute('contenteditable') === 'true') {
+                        // Convert newlines to HTML breaks before setting innerHTML
+                        const formattedBody = body.replace(/\n/g, '<br>');
+                        bodyField.innerHTML = formattedBody;
+                        console.log("Set body content (HTML):", formattedBody.substring(0, 50) + "...");
+                    } else {
+                        bodyField.value = body;
+                        console.log("Set body content (value):", body.substring(0, 50) + "...");
+                    }
+                    
+                    // Update hidden textarea
+                    const hiddenTextarea = document.getElementById('compose-body-hidden');
+                    if (hiddenTextarea) {
+                        // The hidden textarea should contain the HTML version for contenteditable
+                        hiddenTextarea.value = bodyField.innerHTML;
                     }
                 }
                 
-                // If we still don't have a subject, look for the first line
-                if (!subject && body.includes('\n')) {
-                    const firstLine = body.split('\n')[0].trim();
-                    // If the first line is short and doesn't look like a greeting, it might be a subject
-                    if (firstLine.length < 80 && 
-                        !firstLine.match(/^(hi|hello|hey|dear|to whom)/i)) {
-                        subject = firstLine;
-                        console.log("First line as subject:", subject);
-                        body = body.substring(firstLine.length).trim();
-                    }
-                }
-            } else if (emailContent && typeof emailContent === 'object') {
-                // It's an object
-                subject = emailContent.subject || '';
-                body = emailContent.body || '';
-            }
-            
-            // Open compose modal
-            const modal = document.getElementById('compose-modal');
-            modal.style.display = 'block';
-            document.body.classList.add('modal-open');
-            setTimeout(() => modal.classList.add('show'), 10);
-            
-            // Update fields
-            const subjectField = document.getElementById('compose-subject');
-            const bodyField = document.getElementById('compose-body');
-            
-            if (subjectField) subjectField.value = subject;
-            
-            if (bodyField) {
-                if (bodyField.getAttribute('contenteditable') === 'true') {
-                    // Convert newlines to HTML breaks before setting innerHTML
-                    const formattedBody = body.replace(/\n/g, '<br>');
-                    bodyField.innerHTML = formattedBody;
-                    console.log("Set body content (HTML):", formattedBody.substring(0, 50) + "...");
-                } else {
-                    bodyField.value = body;
-                    console.log("Set body content (value):", body.substring(0, 50) + "...");
+                // Focus on the subject field if empty, otherwise the body
+                if (subjectField && !subject) {
+                    subjectField.focus();
+                } else if (bodyField) {
+                    bodyField.focus();
                 }
                 
-                // Update hidden textarea
-                const hiddenTextarea = document.getElementById('compose-body-hidden');
-                if (hiddenTextarea) {
-                    // The hidden textarea should contain the HTML version for contenteditable
-                    hiddenTextarea.value = bodyField.innerHTML;
-                }
-            }
-            
-            // Focus on the subject field if empty, otherwise the body
-            if (subjectField && !subject) {
-                subjectField.focus();
-            } else if (bodyField) {
-                bodyField.focus();
+                // Return true to indicate success
+                return true;
+            } catch (error) {
+                console.error("Error in moveEmailToCompose:", error);
+                return false;
             }
         };
         

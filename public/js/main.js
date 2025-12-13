@@ -206,6 +206,7 @@ function moveEmailToCompose(emailContent) {
             
             DEBUG("Moving to compose", { subject, bodyLength: body.length });
             moveToCompose(body, '', subject);
+            return true;
         } else if (emailContent && typeof emailContent === 'object') {
             // It's an object with properties
             const subject = emailContent.subject || '';
@@ -215,15 +216,16 @@ function moveEmailToCompose(emailContent) {
             DEBUG("Moving object to compose", { subject, to, bodyLength: body?.length || 0 });
             // Pass all three parameters to moveToCompose
             moveToCompose(body, to, subject);
+            return true;
         } else {
             // Invalid input
             DEBUG("ERROR: Invalid email content", emailContent);
-            throw new Error("Invalid email content provided to moveEmailToCompose");
+            return false;
         }
     } catch (error) {
         DEBUG("ERROR in moveEmailToCompose", error);
         console.error("Error in moveEmailToCompose:", error);
-        throw error; // Rethrow so caller can handle
+        return false; // Return false instead of throwing
     }
 }
 
@@ -1101,6 +1103,12 @@ async function openEmail(emailId) {
             const date = headers.find(header => header.name === 'Date')?.value || '';
             const content = getBody(msg.payload);
             
+            // Debug: Log content type and preview
+            console.log('Email content type:', typeof content);
+            console.log('Email content length:', content ? content.length : 0);
+            console.log('Email content preview:', content ? content.substring(0, 200) : 'No content');
+            console.log('Email content contains HTML:', content ? content.includes('<') : false);
+            
             // Extract attachments for this message
             const attachments = getAttachments(msg.payload, msg.id);
 
@@ -1127,14 +1135,24 @@ async function openEmail(emailId) {
                 attachmentsHtml += '</div>';
             }
 
+            // Escape sender name and date for safety, but keep content as HTML
+            const safeSenderName = senderName.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeDate = formatDate(new Date(date)).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            
+            // Ensure content is a string and not undefined/null
+            const safeContent = content || 'No content available';
+            
+            // Create the HTML structure - content should be inserted as-is for HTML rendering
             return `
                 <div class="email-message">
                     <div class="message-header">
-                        <div class="message-sender">${senderName}</div>
-                        <div class="message-date">${formatDate(new Date(date))}</div>
+                        <div style="flex: 1;">
+                            <div class="message-sender">${safeSenderName}</div>
+                        </div>
+                        <div class="message-date">${safeDate}</div>
                     </div>
                     ${attachmentsHtml}
-                    <div class="message-content">${content}</div>
+                    <div class="message-content">${safeContent}</div>
                 </div>
             `;
         }
@@ -1160,17 +1178,19 @@ async function openEmail(emailId) {
             }
         }
 
-        // Simple email styles - minimal and clean
+        // Email styles - Gmail-like appearance
         const threadStyles = `
         <style>
             .thread-container {
-                padding: 20px;
+                padding: 0;
+                background: white;
             }
 
             .email-message {
-                margin-bottom: 24px;
-                padding-bottom: 24px;
-                border-bottom: 1px solid #e0e0e0;
+                margin-bottom: 0;
+                padding: 20px 24px;
+                border-bottom: 1px solid #eceff1;
+                background: white;
             }
 
             .email-message:last-child {
@@ -1178,45 +1198,225 @@ async function openEmail(emailId) {
             }
 
             .message-header {
-                margin-bottom: 12px;
-                padding-bottom: 8px;
-                border-bottom: 1px solid #f0f0f0;
+                margin-bottom: 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid #eceff1;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                gap: 16px;
             }
 
             .message-sender {
-                font-family: Arial, sans-serif;
+                font-family: 'Google Sans', Arial, sans-serif;
                 font-size: 14px;
                 font-weight: 500;
                 color: #202124;
-                margin-bottom: 4px;
-                line-height: 1.4;
+                margin: 0 0 4px 0;
+                line-height: 1.5;
             }
 
             .message-date {
                 color: #5f6368;
                 font-size: 13px;
+                white-space: nowrap;
+                flex-shrink: 0;
+                font-family: Arial, sans-serif;
             }
 
             .message-content {
+                font-family: Arial, Helvetica, sans-serif;
                 font-size: 14px;
-                line-height: 1.5;
+                line-height: 1.6;
                 color: #202124;
                 max-width: 100%;
                 overflow-x: auto;
                 word-wrap: break-word;
+                padding: 0;
+                margin-top: 16px;
                 /* Don't set text-align here - let email HTML control it */
             }
+            
+            /* Ensure email content preserves original styling but is readable */
+            .message-content div,
+            .message-content span,
+            .message-content p {
+                color: inherit;
+            }
+            
+            /* Preserve background colors from emails but ensure text is readable */
+            .message-content div[style*="background"],
+            .message-content table[style*="background"],
+            .message-content td[style*="background"] {
+                /* Keep original backgrounds but ensure contrast */
+            }
+            
+            .message-content p {
+                margin: 0 0 12px 0;
+                padding: 0;
+            }
+            
+            .message-content p:last-child {
+                margin-bottom: 0;
+            }
+            
+            .message-content blockquote {
+                border-left: 3px solid #dadce0;
+                padding-left: 12px;
+                margin: 12px 0;
+                color: #5f6368;
+                font-style: italic;
+            }
+            
+            .message-content pre {
+                background: #f8f9fa;
+                border: 1px solid #dadce0;
+                border-radius: 4px;
+                padding: 12px;
+                overflow-x: auto;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+                line-height: 1.5;
+                margin: 12px 0;
+            }
+            
+            .message-content code {
+                background: #f8f9fa;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+            }
+            
+            .message-content pre code {
+                background: transparent;
+                padding: 0;
+            }
 
-            /* Simple constraints - just prevent overflow, preserve email styling */
+            /* Image styling */
             .message-content img {
                 max-width: 100%;
                 height: auto;
+                display: block;
+                margin: 12px 0;
             }
-
-            /* Only make tables scrollable if they're too wide, preserve their display */
+            
+            /* Link styling */
+            .message-content a {
+                color: #1a73e8;
+                text-decoration: none;
+            }
+            
+            .message-content a:hover {
+                text-decoration: underline;
+            }
+            
+            /* List styling */
+            .message-content ul,
+            .message-content ol {
+                margin: 12px 0;
+                padding-left: 24px;
+            }
+            
+            .message-content li {
+                margin: 6px 0;
+                line-height: 1.6;
+            }
+            
+            /* Table styling - Remove all borders and outlines for marketing emails */
             .message-content table {
                 max-width: 100%;
                 overflow-x: auto;
+                border-collapse: collapse !important;
+                margin: 12px 0;
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            
+            .message-content table tr {
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            
+            .message-content table td,
+            .message-content table th {
+                padding: 8px 12px;
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            
+            .message-content table th {
+                background: #f8f9fa;
+                font-weight: 600;
+            }
+            
+            /* Remove borders, outlines, and debug styles from all elements in email content */
+            .message-content div,
+            .message-content span,
+            .message-content p,
+            .message-content table,
+            .message-content tr,
+            .message-content td,
+            .message-content th {
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            
+            /* Prevent any global debug styles from affecting email content */
+            .message-content * {
+                outline: none !important;
+            }
+            
+            /* Ensure table collapse is set */
+            .message-content table {
+                border-collapse: collapse !important;
+                border-spacing: 0 !important;
+            }
+            
+            /* Heading styling */
+            .message-content h1,
+            .message-content h2,
+            .message-content h3,
+            .message-content h4,
+            .message-content h5,
+            .message-content h6 {
+                margin: 16px 0 8px 0;
+                font-weight: 600;
+                line-height: 1.4;
+                color: #202124;
+            }
+            
+            .message-content h1 { font-size: 24px; }
+            .message-content h2 { font-size: 20px; }
+            .message-content h3 { font-size: 18px; }
+            .message-content h4 { font-size: 16px; }
+            .message-content h5 { font-size: 14px; }
+            .message-content h6 { font-size: 12px; }
+            
+            /* Horizontal rule */
+            .message-content hr {
+                border: none;
+                border-top: 1px solid #eceff1;
+                margin: 16px 0;
+            }
+            
+            /* Strong and emphasis */
+            .message-content strong,
+            .message-content b {
+                font-weight: 600;
+            }
+            
+            .message-content em,
+            .message-content i {
+                font-style: italic;
+            }
+            
+            .message-content u {
+                text-decoration: underline;
             }
 
             /* Preserve centering and alignment from email HTML - use !important to ensure they work */
@@ -1264,16 +1464,77 @@ async function openEmail(emailId) {
                 max-width: 100%;
                 box-sizing: border-box;
             }
+            
+            /* Override any inline styles that add borders/outlines - use multiple selectors for maximum coverage */
+            .message-content [style*="border"],
+            .message-content [style*="outline"],
+            .message-content [style*="box-shadow"],
+            .message-content [style*="border:"],
+            .message-content [style*="outline:"],
+            .message-content [style*="box-shadow:"],
+            .message-content [style*="border "],
+            .message-content [style*="outline "],
+            .message-content [style*="box-shadow "] {
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
+            
+            /* Specifically target table-related elements with inline styles */
+            .message-content table[style],
+            .message-content tr[style],
+            .message-content td[style],
+            .message-content th[style],
+            .message-content div[style],
+            .message-content span[style] {
+                border: none !important;
+                outline: none !important;
+                box-shadow: none !important;
+            }
 
             .email-full-header {
-                padding: 20px;
-                border-bottom: 1px solid #dadce0;
+                padding: 20px 24px 16px 24px;
+                border-bottom: 1px solid #eceff1;
+                background: white;
             }
 
             .email-full-subject {
-                margin: 0;
-                font-size: 20px;
+                margin: 0 0 16px 0;
+                font-size: 22px;
                 font-weight: 400;
+                color: #202124;
+                line-height: 1.4;
+                font-family: 'Google Sans', Arial, sans-serif;
+            }
+            
+            .email-full-metadata {
+                color: #5f6368;
+                font-size: 13px;
+                line-height: 1.6;
+                font-family: Arial, sans-serif;
+            }
+            
+            .email-full-metadata-row {
+                display: flex;
+                align-items: flex-start;
+                gap: 8px;
+                margin-bottom: 8px;
+            }
+            
+            .email-full-metadata-row:last-child {
+                margin-bottom: 0;
+            }
+            
+            .email-full-metadata-label {
+                color: #5f6368;
+                font-weight: 500;
+                min-width: 50px;
+                flex-shrink: 0;
+            }
+            
+            .email-full-metadata-value {
+                color: #202124;
+                flex: 1;
             }
 
             .current-indicator {
@@ -1359,15 +1620,39 @@ async function openEmail(emailId) {
         </style>
         `;
 
+        // Get headers from the first (most recent) message
+        const firstMessageHeaders = messages[0].payload.headers;
+        const subject = firstMessageHeaders.find(h => h.name === 'Subject')?.value || '(no subject)';
+        const from = firstMessageHeaders.find(h => h.name === 'From')?.value || '';
+        const to = firstMessageHeaders.find(h => h.name === 'To')?.value || '';
+        const date = firstMessageHeaders.find(h => h.name === 'Date')?.value || '';
+        
+        // Extract sender name from email
+        const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
+        const senderName = senderMatch ? senderMatch[1].trim() : from;
+        const senderEmail = from.match(/<(.+)>/)?.[1] || from;
+        
         // Update the email viewer content with styles
         emailContent.innerHTML = `
             ${threadStyles}
             <div class="email-full-header">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="flex: 1;">
-                        <h1 class="email-full-subject">${messages[0].payload.headers.find(h => h.name === 'Subject')?.value || '(no subject)'}</h1>
+                <h1 class="email-full-subject">${subject}</h1>
+                <div class="email-full-metadata">
+                    <div class="email-full-metadata-row">
+                        <span class="email-full-metadata-label">From:</span>
+                        <span class="email-full-metadata-value">${senderName}</span>
+                    </div>
+                    ${to ? `
+                    <div class="email-full-metadata-row">
+                        <span class="email-full-metadata-label">To:</span>
+                        <span class="email-full-metadata-value">${to}</span>
+                    </div>
+                    ` : ''}
+                    <div class="email-full-metadata-row">
+                        <span class="email-full-metadata-label">Date:</span>
+                        <span class="email-full-metadata-value">${formatDate(new Date(date))}</span>
+                    </div>
                 </div>
-            </div>
             </div>
             <div class="thread-container">
                 ${threadHtml}
@@ -3150,15 +3435,18 @@ function getBody(payload) {
     if (payload.parts) {
             // First try to find HTML part
             for (let part of payload.parts) {
-                if (part.mimeType === 'text/html' && part.body.data) {
-                    return decodeEmailContent(part.body.data);
+                if (part.mimeType === 'text/html' && part.body && part.body.data) {
+                    const htmlContent = decodeEmailContent(part.body.data);
+                    console.log('Found HTML part, length:', htmlContent.length);
+                    return htmlContent;
                 }
             }
             
             // If no HTML, look for plain text
         for (let part of payload.parts) {
-            if (part.mimeType === 'text/plain' && part.body.data) {
+            if (part.mimeType === 'text/plain' && part.body && part.body.data) {
                     content = decodeEmailContent(part.body.data);
+                    console.log('Found plain text part, length:', content.length);
                     break;
             }
             }
@@ -3168,7 +3456,10 @@ function getBody(payload) {
                 for (let part of payload.parts) {
             if (part.parts) {
                         content = getBody(part);
-                        if (content) break;
+                        if (content) {
+                            console.log('Found content in nested parts, length:', content.length);
+                            break;
+                        }
             }
         }
             }
@@ -3195,17 +3486,31 @@ function decodeEmailContent(data) {
         const decoded = atob(text);
         
         // Handle UTF-8 encoding
-        const escaped = decodeURIComponent(escape(decoded));
+        let htmlContent;
+        try {
+            htmlContent = decodeURIComponent(escape(decoded));
+        } catch (e) {
+            // Fallback if UTF-8 decoding fails
+            htmlContent = decoded;
+        }
         
         // Basic HTML sanitization:
         // - strip scripts
         // - strip inline event handlers
         // - strip javascript: URLs
         // Layout and sizing are handled via CSS instead of rewriting tags here.
-        return escaped
+        const sanitized = htmlContent
             .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-            .replace(/on\w+="[^"]*"/g, '')
+            .replace(/on\w+="[^"]*"/gi, '')
+            .replace(/on\w+='[^']*'/gi, '')
             .replace(/javascript:/gi, '');
+        
+        // Debug: Log if we have HTML content
+        if (sanitized.includes('<')) {
+            console.log('Decoded HTML content detected, length:', sanitized.length);
+        }
+        
+        return sanitized;
     } catch (error) {
         console.error('Error decoding email content:', error);
         return 'Error decoding email content';
