@@ -282,6 +282,15 @@ function moveLastAIMessageToCompose(messages) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize greeting button if user is already authenticated
+    if (localStorage.getItem('isAuthenticated') === 'true') {
+        const userEmail = localStorage.getItem('userEmail');
+        const greetingBtn = document.getElementById('user-greeting');
+        if (userEmail && greetingBtn) {
+            greetingBtn.textContent = `Hi, ${userEmail}`;
+        }
+    }
+    
     // Add styles for email formatting
     const style = document.createElement('style');
     style.textContent = `
@@ -546,7 +555,10 @@ async function handleAuthResponse(response) {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userEmail', userEmail);
         
-        document.getElementById('user-greeting').textContent = `Hi, ${userEmail}`;
+        const greetingBtn = document.getElementById('user-greeting');
+        if (greetingBtn) {
+            greetingBtn.textContent = `Hi, ${userEmail}`;
+        }
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         
@@ -1197,7 +1209,7 @@ async function openEmail(emailId) {
 
             .email-message {
                 margin-bottom: 0;
-                padding: 20px 24px;
+                padding: 16px 24px;
                 border-bottom: 1px solid #eceff1;
                 background: white;
                 color: #202124 !important; /* Force explicit color */
@@ -1215,7 +1227,7 @@ async function openEmail(emailId) {
             }
 
             .message-header {
-                margin-bottom: 16px;
+                margin-bottom: 12px;
                 padding-bottom: 12px;
                 border-bottom: 1px solid #eceff1;
                 display: flex;
@@ -1244,14 +1256,14 @@ async function openEmail(emailId) {
             .message-content {
                 font-family: Arial, Helvetica, sans-serif;
                 font-size: 14px;
-                line-height: 1.6;
+                line-height: 1.5;
                 color: #202124 !important; /* Force explicit color */
                 max-width: 100%;
                 overflow-x: auto;
                 overflow-y: visible;
                 word-wrap: break-word;
                 padding: 0;
-                margin-top: 16px;
+                margin-top: 12px;
                 /* Don't set text-align here - let email HTML control it */
                 
                 /* Hard containment: Prevent background images/colors from bleeding */
@@ -1450,7 +1462,7 @@ async function openEmail(emailId) {
             }
             
             .message-content p {
-                margin: 0 0 12px 0;
+                margin: 0 0 10px 0;
                 padding: 0;
             }
             
@@ -1458,10 +1470,14 @@ async function openEmail(emailId) {
                 margin-bottom: 0;
             }
             
+            .message-content p:first-child {
+                margin-top: 0;
+            }
+            
             .message-content blockquote {
                 border-left: 3px solid #dadce0;
                 padding-left: 12px;
-                margin: 12px 0;
+                margin: 10px 0;
                 color: #5f6368;
                 font-style: italic;
             }
@@ -1475,7 +1491,7 @@ async function openEmail(emailId) {
                 font-family: 'Courier New', monospace;
                 font-size: 13px;
                 line-height: 1.5;
-                margin: 12px 0;
+                margin: 10px 0;
             }
             
             .message-content code {
@@ -1496,7 +1512,7 @@ async function openEmail(emailId) {
                 max-width: 100%;
                 height: auto;
                 display: block;
-                margin: 12px 0;
+                margin: 10px 0;
             }
             
             /* Link styling */
@@ -1512,13 +1528,13 @@ async function openEmail(emailId) {
             /* List styling */
             .message-content ul,
             .message-content ol {
-                margin: 12px 0;
+                margin: 10px 0;
                 padding-left: 24px;
             }
             
             .message-content li {
-                margin: 6px 0;
-                line-height: 1.6;
+                margin: 4px 0;
+                line-height: 1.5;
             }
             
             /* Table styling - Remove all borders and outlines for marketing emails */
@@ -1526,7 +1542,7 @@ async function openEmail(emailId) {
                 max-width: 100%;
                 overflow-x: auto;
                 border-collapse: collapse !important;
-                margin: 12px 0;
+                margin: 10px 0;
                 border: none !important;
                 outline: none !important;
                 box-shadow: none !important;
@@ -1582,10 +1598,19 @@ async function openEmail(emailId) {
             .message-content h4,
             .message-content h5,
             .message-content h6 {
-                margin: 16px 0 8px 0;
+                margin: 14px 0 6px 0;
                 font-weight: 600;
                 line-height: 1.4;
                 color: #202124;
+            }
+            
+            .message-content h1:first-child,
+            .message-content h2:first-child,
+            .message-content h3:first-child,
+            .message-content h4:first-child,
+            .message-content h5:first-child,
+            .message-content h6:first-child {
+                margin-top: 0;
             }
             
             .message-content h1 { font-size: 24px; }
@@ -1599,7 +1624,7 @@ async function openEmail(emailId) {
             .message-content hr {
                 border: none;
                 border-top: 1px solid #eceff1;
-                margin: 16px 0;
+                margin: 12px 0;
             }
             
             /* Strong and emphasis */
@@ -1615,6 +1640,205 @@ async function openEmail(emailId) {
             
             .message-content u {
                 text-decoration: underline;
+            }
+            
+            /* Small text */
+            .message-content small {
+                font-size: 12px;
+                color: #5f6368;
+            }
+            
+            /* Subscript and superscript */
+            .message-content sub,
+            .message-content sup {
+                font-size: 75%;
+                line-height: 0;
+                position: relative;
+                vertical-align: baseline;
+            }
+            
+            .message-content sup {
+                top: -0.5em;
+            }
+            
+            .message-content sub {
+                bottom: -0.25em;
+            }
+            
+            /* Strikethrough and deleted text */
+            .message-content del,
+            .message-content s,
+            .message-content strike {
+                text-decoration: line-through;
+                color: #5f6368;
+            }
+            
+            /* Mark/highlight */
+            .message-content mark {
+                background-color: #fef08a;
+                color: #202124;
+                padding: 2px 4px;
+                border-radius: 2px;
+            }
+            
+            /* Address tag */
+            .message-content address {
+                font-style: italic;
+                margin: 10px 0;
+                line-height: 1.5;
+            }
+            
+            /* Definition lists */
+            .message-content dl {
+                margin: 10px 0;
+            }
+            
+            .message-content dt {
+                font-weight: 600;
+                margin-top: 10px;
+                margin-bottom: 4px;
+            }
+            
+            .message-content dd {
+                margin-left: 24px;
+                margin-bottom: 10px;
+            }
+            
+            /* Font tag support (old HTML, still used in emails) */
+            .message-content font {
+                display: inline;
+            }
+            
+            /* Email signatures - common patterns */
+            .message-content .gmail_signature,
+            .message-content .gmail_quote,
+            .message-content .signature,
+            .message-content [class*="signature"],
+            .message-content [id*="signature"] {
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid #eceff1;
+                color: #5f6368;
+                font-size: 13px;
+            }
+            
+            /* Quoted/reply text - common email patterns */
+            .message-content .gmail_quote,
+            .message-content [class*="quote"],
+            .message-content [id*="quote"] {
+                border-left: 3px solid #dadce0;
+                padding-left: 12px;
+                margin: 10px 0;
+                color: #5f6368;
+                font-size: 13px;
+            }
+            
+            /* Outlook-specific elements */
+            .message-content [class*="MsoNormal"],
+            .message-content [class*="MsoListParagraph"] {
+                margin: 10px 0;
+            }
+            
+            /* Email client specific spacing */
+            .message-content br {
+                line-height: 1.5;
+            }
+            
+            /* Divider/separator elements */
+            .message-content .divider,
+            .message-content .separator {
+                border-top: 1px solid #eceff1;
+                margin: 12px 0;
+                height: 0;
+            }
+            
+            /* Nested blockquotes (common in email threads) */
+            .message-content blockquote blockquote {
+                margin-left: 12px;
+                border-left-color: #c6c6c6;
+            }
+            
+            .message-content blockquote blockquote blockquote {
+                border-left-color: #9e9e9e;
+            }
+            
+            /* Email client specific classes */
+            .message-content [class*="Apple"] {
+                /* Apple Mail specific styles */
+            }
+            
+            .message-content [class*="Outlook"] {
+                /* Outlook specific styles */
+            }
+            
+            /* Common email wrapper patterns */
+            .message-content .email-body,
+            .message-content .email-content,
+            .message-content .message-body {
+                margin: 0;
+                padding: 0;
+            }
+            
+            /* Email footer patterns */
+            .message-content .email-footer,
+            .message-content .footer,
+            .message-content [class*="footer"] {
+                margin-top: 16px;
+                padding-top: 12px;
+                border-top: 1px solid #eceff1;
+                font-size: 12px;
+                color: #5f6368;
+            }
+            
+            /* Email header patterns */
+            .message-content .email-header,
+            .message-content .header {
+                margin-bottom: 12px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid #eceff1;
+            }
+            
+            /* Button styling in emails */
+            .message-content .button,
+            .message-content [class*="button"],
+            .message-content a[class*="btn"] {
+                display: inline-block;
+                padding: 10px 20px;
+                background-color: #1a73e8;
+                color: #ffffff !important;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 500;
+                margin: 8px 4px;
+            }
+            
+            .message-content .button:hover,
+            .message-content [class*="button"]:hover,
+            .message-content a[class*="btn"]:hover {
+                background-color: #1557b0;
+                text-decoration: none;
+            }
+            
+            /* Email call-to-action buttons */
+            .message-content [class*="cta"],
+            .message-content [class*="call-to-action"] {
+                display: inline-block;
+                padding: 12px 24px;
+                background-color: #1a73e8;
+                color: #ffffff !important;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 600;
+                margin: 10px 0;
+            }
+            
+            /* Spacer elements (common in email templates) */
+            .message-content .spacer,
+            .message-content [class*="spacer"] {
+                display: block;
+                height: 1px;
+                line-height: 1px;
+                font-size: 1px;
             }
 
             /* Preserve centering and alignment from email HTML - use !important to ensure they work */
@@ -1691,24 +1915,25 @@ async function openEmail(emailId) {
             }
 
             .email-full-header {
-                padding: 20px 24px 16px 24px;
+                padding: 16px 24px;
                 border-bottom: 1px solid #eceff1;
                 background: white;
             }
 
             .email-full-subject {
-                margin: 0 0 16px 0;
+                margin: 0 0 12px 0;
                 font-size: 22px;
                 font-weight: 400;
                 color: #202124;
-                line-height: 1.4;
+                line-height: 1.38;
                 font-family: 'Google Sans', Arial, sans-serif;
+                letter-spacing: 0;
             }
             
             .email-full-metadata {
                 color: #5f6368;
                 font-size: 13px;
-                line-height: 1.6;
+                line-height: 1.5;
                 font-family: Arial, sans-serif;
             }
             
@@ -1716,7 +1941,7 @@ async function openEmail(emailId) {
                 display: flex;
                 align-items: flex-start;
                 gap: 8px;
-                margin-bottom: 8px;
+                margin-bottom: 6px;
             }
             
             .email-full-metadata-row:last-child {
@@ -2068,9 +2293,15 @@ async function switchSection(section) {
     emailTabs.style.display = 'flex';
     
     // Hide AI Settings if visible
-    const settingsContainer = document.getElementById('ai-settings-container');
-    if (settingsContainer) {
-        settingsContainer.style.display = 'none';
+    const aiSettingsContainer = document.getElementById('ai-settings-container');
+    if (aiSettingsContainer) {
+        aiSettingsContainer.style.display = 'none';
+    }
+    
+    // Hide Profile Settings if visible
+    const profileSettingsContainer = document.getElementById('profile-settings-container');
+    if (profileSettingsContainer) {
+        profileSettingsContainer.style.display = 'none';
     }
     
     // Update active states
@@ -4082,6 +4313,12 @@ async function switchTab(category) {
             aiSettingsContainer.style.display = 'none';
         }
         
+        // Hide Profile Settings if visible
+        const profileSettingsContainer = document.getElementById('profile-settings-container');
+        if (profileSettingsContainer) {
+            profileSettingsContainer.style.display = 'none';
+        }
+        
         // Show email list and tabs
         document.getElementById('emailList').style.display = 'block';
         
@@ -4135,39 +4372,266 @@ function getQueryForCategory(category) {
     }
 }
 
-// Add this function to handle AI settings click
-function openAISettings() {
-    // Hide email list, viewer, tabs, and search bar
+// Add function to handle profile settings
+function openProfileSettings() {
+    // Hide email list container, email list, tabs, and search bar
+    const emailListContainer = document.querySelector('.email-list-container');
+    if (emailListContainer) {
+        emailListContainer.style.display = 'none';
+    }
     document.getElementById('emailList').style.display = 'none';
-    document.getElementById('email-viewer').style.display = 'none';
     document.getElementById('email-tabs').style.display = 'none';
     document.querySelector('.search-bar').style.display = 'none';
     
-    // Get or create settings container
-    let settingsContainer = document.getElementById('ai-settings-container');
-    if (!settingsContainer) {
-        settingsContainer = document.createElement('div');
-        settingsContainer.id = 'ai-settings-container';
-        document.querySelector('.main-content').appendChild(settingsContainer);
+    // Hide email viewer if visible
+    const emailViewer = document.getElementById('email-viewer');
+    if (emailViewer) {
+        emailViewer.style.display = 'none';
     }
     
-    // Update settings content without back button
+    // Hide AI settings if visible
+    const aiSettingsContainer = document.getElementById('ai-settings-container');
+    if (aiSettingsContainer) {
+        aiSettingsContainer.style.display = 'none';
+    }
+    
+    // Get or create profile settings container
+    let settingsContainer = document.getElementById('profile-settings-container');
+    
+    if (!settingsContainer) {
+        settingsContainer = document.createElement('div');
+        settingsContainer.id = 'profile-settings-container';
+        const mainContent = document.querySelector('.main-content');
+        mainContent.appendChild(settingsContainer);
+        // Ensure consistent positioning
+        settingsContainer.style.position = 'relative';
+        settingsContainer.style.top = '0';
+        settingsContainer.style.left = '0';
+    }
+    
+    // Get user email from localStorage or global variable
+    const userEmail = localStorage.getItem('userEmail') || window.userEmail || 'User';
+    
+    // Store current tab state
+    const currentTab = settingsContainer.getAttribute('data-current-tab') || 'profile';
+    
+    // Update settings content with tabs
     settingsContainer.innerHTML = `
-        <div class="settings-header">
-            <h2>AI Settings</h2>
+        <div style="padding: 16px 24px 0 24px;">
+            <button class="settings-back-button" onclick="closeProfileSettings()">Back to Emails</button>
         </div>
-        <div class="settings-content">
-            <p>AI Settings page - Coming soon</p>
+        <div class="settings-tabs">
+            <button class="settings-tab ${currentTab === 'profile' ? 'active' : ''}" onclick="switchSettingsTab('profile')">Profile Settings</button>
+            <button class="settings-tab ${currentTab === 'ai' ? 'active' : ''}" onclick="switchSettingsTab('ai')">AI Settings</button>
+        </div>
+        <div class="settings-tab-content-wrapper" id="settings-tab-content-wrapper">
+            ${currentTab === 'profile' ? `
+            <div class="settings-tab-content" id="profile-tab-content">
+                <div class="settings-header">
+                    <h2>Profile Settings</h2>
+                </div>
+                <div class="settings-content">
+                    <div class="profile-section">
+                        <h3>Account Information</h3>
+                        <div class="profile-field">
+                            <label>Email Address:</label>
+                            <span>${userEmail}</span>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Personal Information</h3>
+                        <div class="profile-field">
+                            <label for="profile-name">Full Name:</label>
+                            <input type="text" id="profile-name" placeholder="Enter your full name" value="${localStorage.getItem('profileName') || ''}">
+                        </div>
+                        <div class="profile-field">
+                            <label for="profile-title">Job Title:</label>
+                            <input type="text" id="profile-title" placeholder="Enter your job title" value="${localStorage.getItem('profileTitle') || ''}">
+                        </div>
+                        <div class="profile-field">
+                            <label for="profile-company">Company:</label>
+                            <input type="text" id="profile-company" placeholder="Enter your company name" value="${localStorage.getItem('profileCompany') || ''}">
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Contact Information</h3>
+                        <div class="profile-field">
+                            <label for="profile-phone">Phone Number:</label>
+                            <input type="tel" id="profile-phone" placeholder="Enter your phone number" value="${localStorage.getItem('profilePhone') || ''}">
+                        </div>
+                        <div class="profile-field">
+                            <label for="profile-website">Website/Portfolio:</label>
+                            <input type="url" id="profile-website" placeholder="https://example.com" value="${localStorage.getItem('profileWebsite') || ''}">
+                        </div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="save-btn" onclick="saveProfileSettings()">Save Changes</button>
+                        <button class="cancel-btn" onclick="closeProfileSettings()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            ` : `
+            <div class="settings-tab-content" id="ai-tab-content">
+                <div class="settings-header">
+                    <h2>AI Settings</h2>
+                </div>
+                <div class="settings-content">
+                    <div class="coming-soon-text">Coming Soon</div>
+                </div>
+            </div>
+            `}
         </div>
     `;
     
-    settingsContainer.style.display = 'block';
+    // Store current tab
+    settingsContainer.setAttribute('data-current-tab', currentTab);
     
-    // Update active state in navigation - include both nav-item and sub-nav-item
+    // Reset position and show container
+    settingsContainer.style.display = 'block';
+    settingsContainer.style.position = 'relative';
+    settingsContainer.style.top = '0';
+    settingsContainer.style.left = '0';
+    settingsContainer.style.margin = '20px';
+    
+    // Update active state in navigation
     document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    document.querySelector('.nav-item[onclick*="openAISettings"]').classList.add('active');
+}
+
+function saveProfileSettings() {
+    // Save profile settings to localStorage
+    const name = document.getElementById('profile-name').value;
+    const title = document.getElementById('profile-title').value;
+    const company = document.getElementById('profile-company').value;
+    const phone = document.getElementById('profile-phone').value;
+    const website = document.getElementById('profile-website').value;
+    
+    localStorage.setItem('profileName', name);
+    localStorage.setItem('profileTitle', title);
+    localStorage.setItem('profileCompany', company);
+    localStorage.setItem('profilePhone', phone);
+    localStorage.setItem('profileWebsite', website);
+    
+    // Show success message
+    alert('Profile settings saved successfully!');
+    
+    // Close profile settings
+    closeProfileSettings();
+}
+
+function switchSettingsTab(tabName) {
+    const settingsContainer = document.getElementById('profile-settings-container');
+    if (!settingsContainer) return;
+    
+    // Store current tab
+    settingsContainer.setAttribute('data-current-tab', tabName);
+    
+    // Get user email for profile tab
+    const userEmail = localStorage.getItem('userEmail') || window.userEmail || 'User';
+    
+    // Get the wrapper
+    const wrapper = document.getElementById('settings-tab-content-wrapper');
+    if (!wrapper) return;
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Update tab buttons
+    const tabs = document.querySelectorAll('.settings-tab');
+    if (tabName === 'profile' && tabs[0]) {
+        tabs[0].classList.add('active');
+    } else if (tabName === 'ai' && tabs[1]) {
+        tabs[1].classList.add('active');
+    }
+    
+    // Replace content based on tab
+    if (tabName === 'profile') {
+        wrapper.innerHTML = `
+            <div class="settings-tab-content" id="profile-tab-content">
+                <div class="settings-header">
+                    <h2>Profile Settings</h2>
+                </div>
+                <div class="settings-content">
+                    <div class="profile-section">
+                        <h3>Account Information</h3>
+                        <div class="profile-field">
+                            <label>Email Address:</label>
+                            <span>${userEmail}</span>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Personal Information</h3>
+                        <div class="profile-field">
+                            <label for="profile-name">Full Name:</label>
+                            <input type="text" id="profile-name" placeholder="Enter your full name" value="${localStorage.getItem('profileName') || ''}">
+                        </div>
+                        <div class="profile-field">
+                            <label for="profile-title">Job Title:</label>
+                            <input type="text" id="profile-title" placeholder="Enter your job title" value="${localStorage.getItem('profileTitle') || ''}">
+                        </div>
+                        <div class="profile-field">
+                            <label for="profile-company">Company:</label>
+                            <input type="text" id="profile-company" placeholder="Enter your company name" value="${localStorage.getItem('profileCompany') || ''}">
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Contact Information</h3>
+                        <div class="profile-field">
+                            <label for="profile-phone">Phone Number:</label>
+                            <input type="tel" id="profile-phone" placeholder="Enter your phone number" value="${localStorage.getItem('profilePhone') || ''}">
+                        </div>
+                        <div class="profile-field">
+                            <label for="profile-website">Website/Portfolio:</label>
+                            <input type="url" id="profile-website" placeholder="https://example.com" value="${localStorage.getItem('profileWebsite') || ''}">
+                        </div>
+                    </div>
+                    <div class="profile-actions">
+                        <button class="save-btn" onclick="saveProfileSettings()">Save Changes</button>
+                        <button class="cancel-btn" onclick="closeProfileSettings()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (tabName === 'ai') {
+        wrapper.innerHTML = `
+            <div class="settings-tab-content" id="ai-tab-content">
+                <div class="settings-header">
+                    <h2>AI Settings</h2>
+                </div>
+                <div class="settings-content">
+                    <div class="coming-soon-text">Coming Soon</div>
+                </div>
+            </div>
+        `;
+    }
+}
+
+function closeProfileSettings() {
+    // Hide profile settings container
+    const settingsContainer = document.getElementById('profile-settings-container');
+    if (settingsContainer) {
+        settingsContainer.style.display = 'none';
+    }
+    
+    // Show email list container
+    const emailListContainer = document.querySelector('.email-list-container');
+    if (emailListContainer) {
+        emailListContainer.style.display = 'flex';
+    }
+    
+    // Show email list, tabs, and search bar
+    document.getElementById('emailList').style.display = 'block';
+    document.getElementById('email-tabs').style.display = 'flex';
+    document.querySelector('.search-bar').style.display = 'flex';
+    
+    // Reset active state in navigation
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
 }
 
 function closeAISettings() {

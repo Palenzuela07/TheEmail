@@ -41,13 +41,13 @@ app.use(helmet({
 
 // Cache control headers
 app.use((req, res, next) => {
-  res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store'
-  });
-  next();
+    res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+    });
+    next();
 });
 
 // Add these middleware before your routes
@@ -171,10 +171,40 @@ app.post('/api/chat', aiLimiter, verifyAuth, validateChatInput, async (req, res)
       ? new Date(timestamp).toLocaleString() 
       : new Date().toLocaleString();
     
+    // Get current date and time in readable formats
+    const now = timestamp ? new Date(timestamp) : new Date();
+    const currentDate = now.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const currentTimeFormatted = now.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+      timeZoneName: 'short'
+    });
+    const currentDateShort = now.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    
     // Update system prompt to generate emails immediately without questions
     const systemPrompt = {
       role: 'system',
       content: `You are a helpful assistant that answers questions and generates emails instantly.
+
+CURRENT DATE AND TIME INFORMATION:
+- Current date: ${currentDate}
+- Current time: ${currentTimeFormatted}
+- Date (MM/DD/YYYY): ${currentDateShort}
+- Day of week: ${now.toLocaleDateString('en-US', { weekday: 'long' })}
+- Time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}
+
+When users ask about the current date, time, day of the week, or any time-related questions, use the information above to provide accurate answers.
 
 KEY INSTRUCTIONS FOR EMAILS:
 1. For email requests - NEVER ask for more details, just create the email IMMEDIATELY
