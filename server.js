@@ -152,7 +152,7 @@ app.post('/api/chat', aiLimiter, verifyAuth, validateChatInput, async (req, res)
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const { message, history, timestamp } = req.body;
+    const { message, history, timestamp, tone, length, contextAwareness, signature } = req.body;
     
     // Additional sanitization
     const sanitizedMessage = message.trim().substring(0, 10000);
@@ -192,10 +192,65 @@ app.post('/api/chat', aiLimiter, verifyAuth, validateChatInput, async (req, res)
       day: '2-digit'
     });
     
+    // Get tone preference (default to 'professional' if not provided)
+    const emailTone = tone || 'professional';
+    
+    // Define tone-specific instructions
+    let toneInstructions = '';
+    switch(emailTone) {
+      case 'formal':
+        toneInstructions = `TONE: Write in a FORMAL tone. Use formal language, proper titles (Mr., Ms., Dr.), complete sentences, and traditional business closings like "Respectfully yours" or "Yours sincerely". Avoid contractions and casual expressions.`;
+        break;
+      case 'professional':
+        toneInstructions = `TONE: Write in a PROFESSIONAL tone. Use clear, business-appropriate language. Balance formality with approachability. Use standard business closings like "Best regards" or "Sincerely". You may use contractions sparingly.`;
+        break;
+      case 'casual':
+        toneInstructions = `TONE: Write in a CASUAL tone. Use friendly, conversational language. Contractions are fine. Use casual greetings like "Hi" or "Hey" and closings like "Thanks" or "Best". Keep it relaxed but still respectful.`;
+        break;
+      default:
+        toneInstructions = `TONE: Write in a PROFESSIONAL tone. Use clear, business-appropriate language.`;
+    }
+    
+    // Get response length preference (default to 'medium' if not provided)
+    const emailLength = length || 'medium';
+    
+    // Define length-specific instructions
+    let lengthInstructions = '';
+    switch(emailLength) {
+      case 'short':
+        lengthInstructions = `LENGTH: Write a SHORT email. Keep it concise - 2-3 sentences maximum. Get straight to the point without unnecessary details.`;
+        break;
+      case 'medium':
+        lengthInstructions = `LENGTH: Write a MEDIUM-length email. Include necessary details and context, typically 1-2 paragraphs.`;
+        break;
+      case 'long':
+        lengthInstructions = `LENGTH: Write a LONG email. Provide comprehensive details, context, and explanations. Use multiple paragraphs as needed to fully address the topic.`;
+        break;
+      default:
+        lengthInstructions = `LENGTH: Write a MEDIUM-length email. Include necessary details and context, typically 1-2 paragraphs.`;
+    }
+    
+    // Get context awareness preference (default to 'on' if not provided)
+    const useContextAwareness = contextAwareness !== 'off';
+    
+    // Define context awareness instructions
+    let contextInstructions = '';
+    if (useContextAwareness) {
+      contextInstructions = `CONTEXT AWARENESS: Use the conversation history and email thread context to provide more relevant and contextual responses. Reference previous messages when appropriate to maintain continuity and understanding.`;
+    } else {
+      contextInstructions = `CONTEXT AWARENESS: Do not rely heavily on conversation history. Generate responses based primarily on the current message without extensive reference to previous context.`;
+    }
+    
     // Update system prompt to generate emails immediately without questions
     const systemPrompt = {
       role: 'system',
       content: `You are a helpful assistant that answers questions and generates emails instantly.
+
+${toneInstructions}
+
+${lengthInstructions}
+
+${contextInstructions}
 
 CURRENT DATE AND TIME INFORMATION:
 - Current date: ${currentDate}
@@ -216,7 +271,7 @@ KEY INSTRUCTIONS FOR EMAILS:
    - Write the email body with clear paragraphs
    - Add a blank line
    - End with a closing like "Best regards," or "Sincerely,"
-   - Add a signature line with the user's name
+   ${signature ? `   - Add the following signature after the closing:\n${signature}` : "   - Add a signature line with the user's name"}
 4. Never invent information not provided by the user
 5. Keep emails simple and focused on the requested topic
 6. Always generate complete, ready-to-send emails in proper format

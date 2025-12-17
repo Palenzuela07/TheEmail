@@ -2298,6 +2298,24 @@ async function switchSection(section) {
         profileSettingsContainer.style.display = 'none';
     }
     
+    // Show email list container
+    const emailListContainer = document.querySelector('.email-list-container');
+    if (emailListContainer) {
+        emailListContainer.style.display = 'flex';
+    }
+    
+    // Show email list
+    const emailList = document.getElementById('emailList');
+    if (emailList) {
+        emailList.style.display = 'block';
+    }
+    
+    // Show search bar
+    const searchBar = document.querySelector('.search-bar');
+    if (searchBar) {
+        searchBar.style.display = 'flex';
+    }
+    
     // Update active states
     document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
         item.classList.remove('active');
@@ -2476,6 +2494,12 @@ async function sendChatMessage() {
             historyLength: conversationHistory.length
         });
         
+        // Get AI tone preference, length, context awareness, and signature from localStorage
+        const aiTone = localStorage.getItem('aiTone') || 'professional';
+        const aiLength = localStorage.getItem('aiLength') || 'medium';
+        const aiContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
+        const aiSignature = localStorage.getItem('aiSignature') || '';
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -2484,7 +2508,11 @@ async function sendChatMessage() {
             body: JSON.stringify({ 
                 message: userMessage,
                 history: conversationHistory,
-                timestamp: new Date().toISOString() // Add current timestamp
+                timestamp: new Date().toISOString(), // Add current timestamp
+                tone: aiTone,
+                length: aiLength,
+                contextAwareness: aiContextAwareness,
+                signature: aiSignature
             })
         });
 
@@ -3475,6 +3503,12 @@ async function generateAIEmail() {
         DEBUG("Sending request to server API for email generation");
         
         // Use the server's chat endpoint 
+        // Get AI tone preference, length, context awareness, and signature from localStorage
+        const aiTone = localStorage.getItem('aiTone') || 'professional';
+        const aiLength = localStorage.getItem('aiLength') || 'medium';
+        const aiContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
+        const aiSignature = localStorage.getItem('aiSignature') || '';
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -3483,7 +3517,11 @@ async function generateAIEmail() {
             body: JSON.stringify({
                 message: userMessage,
                 history: emailHistory,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                tone: aiTone,
+                length: aiLength,
+                contextAwareness: aiContextAwareness,
+                signature: aiSignature
             })
         });
 
@@ -4176,6 +4214,12 @@ Write complete email responses with proper structure:
         DEBUG("Sending request to server API");
         
         // Use the server's chat endpoint instead of calling OpenAI directly
+        // Get AI tone preference, length, context awareness, and signature from localStorage
+        const aiTone = localStorage.getItem('aiTone') || 'professional';
+        const aiLength = localStorage.getItem('aiLength') || 'medium';
+        const aiContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
+        const aiSignature = localStorage.getItem('aiSignature') || '';
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -4184,7 +4228,11 @@ Write complete email responses with proper structure:
             body: JSON.stringify({
                 message: `Reply to this email: ${emailBody.trim().substring(0, 1500)}`,
                 history: replyHistory,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                tone: aiTone,
+                length: aiLength,
+                contextAwareness: aiContextAwareness,
+                signature: aiSignature
             })
         });
         
@@ -4311,6 +4359,12 @@ async function switchTab(category) {
         const profileSettingsContainer = document.getElementById('profile-settings-container');
         if (profileSettingsContainer) {
             profileSettingsContainer.style.display = 'none';
+        }
+        
+        // Show email list container
+        const emailListContainer = document.querySelector('.email-list-container');
+        if (emailListContainer) {
+            emailListContainer.style.display = 'flex';
         }
         
         // Show email list and tabs
@@ -4467,7 +4521,48 @@ function openProfileSettings() {
                     <h2>AI Settings</h2>
                 </div>
                 <div class="settings-content">
-                    <div class="coming-soon-text">Coming Soon</div>
+                    <div class="profile-section">
+                        <h3>Email Tone</h3>
+                        <div class="profile-field">
+                            <label>Choose the tone for AI-generated emails</label>
+                            <div class="tone-selector">
+                                <button class="tone-option ${(localStorage.getItem('aiTone') || 'professional') === 'formal' ? 'active' : ''}" onclick="setAITone('formal')" data-tone="formal">Formal</button>
+                                <button class="tone-option ${(localStorage.getItem('aiTone') || 'professional') === 'professional' ? 'active' : ''}" onclick="setAITone('professional')" data-tone="professional">Professional</button>
+                                <button class="tone-option ${(localStorage.getItem('aiTone') || 'professional') === 'casual' ? 'active' : ''}" onclick="setAITone('casual')" data-tone="casual">Casual</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Response Length</h3>
+                        <div class="profile-field">
+                            <label>Choose the length for AI-generated emails</label>
+                            <div class="tone-selector">
+                                <button class="tone-option ${(localStorage.getItem('aiLength') || 'medium') === 'short' ? 'active' : ''}" onclick="setAILength('short')" data-length="short">Short</button>
+                                <button class="tone-option ${(localStorage.getItem('aiLength') || 'medium') === 'medium' ? 'active' : ''}" onclick="setAILength('medium')" data-length="medium">Medium</button>
+                                <button class="tone-option ${(localStorage.getItem('aiLength') || 'medium') === 'long' ? 'active' : ''}" onclick="setAILength('long')" data-length="long">Long</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Context Awareness</h3>
+                        <div class="profile-field">
+                            <label>Use email thread history for better responses</label>
+                            <div class="tone-selector">
+                                <button class="tone-option ${(localStorage.getItem('aiContextAwareness') || 'on') === 'on' ? 'active' : ''}" onclick="setAIContextAwareness('on')" data-context="on">On</button>
+                                <button class="tone-option ${(localStorage.getItem('aiContextAwareness') || 'on') === 'off' ? 'active' : ''}" onclick="setAIContextAwareness('off')" data-context="off">Off</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Email Signature</h3>
+                        <div class="profile-field">
+                            <label>Add a signature that will be automatically included at the end of AI-generated emails</label>
+                            <div class="signature-input-container">
+                                <textarea id="ai-signature" class="signature-input" placeholder="Enter your signature (e.g., Your Name&#10;Job Title&#10;Company Name&#10;Email: your.email@example.com&#10;Phone: (555) 123-4567)" rows="5">${localStorage.getItem('aiSignature') || ''}</textarea>
+                                <button class="save-signature-btn" onclick="saveAISignature()">Save Signature</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             `}
@@ -4601,18 +4696,225 @@ function switchSettingsTab(tabName) {
             </div>
         `;
     } else if (tabName === 'ai') {
+        const currentTone = localStorage.getItem('aiTone') || 'professional';
+        const currentLength = localStorage.getItem('aiLength') || 'medium';
+        const currentContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
         wrapper.innerHTML = `
             <div class="settings-tab-content" id="ai-tab-content">
                 <div class="settings-header">
                     <h2>AI Settings</h2>
                 </div>
                 <div class="settings-content">
-                    <div class="coming-soon-text">Coming Soon</div>
+                    <div class="profile-section">
+                        <h3>Email Tone</h3>
+                        <div class="profile-field">
+                            <label>Choose the tone for AI-generated emails</label>
+                            <div class="tone-selector">
+                                <button class="tone-option ${currentTone === 'formal' ? 'active' : ''}" onclick="setAITone('formal')" data-tone="formal">Formal</button>
+                                <button class="tone-option ${currentTone === 'professional' ? 'active' : ''}" onclick="setAITone('professional')" data-tone="professional">Professional</button>
+                                <button class="tone-option ${currentTone === 'casual' ? 'active' : ''}" onclick="setAITone('casual')" data-tone="casual">Casual</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Response Length</h3>
+                        <div class="profile-field">
+                            <label>Choose the length for AI-generated emails</label>
+                            <div class="tone-selector">
+                                <button class="tone-option ${currentLength === 'short' ? 'active' : ''}" onclick="setAILength('short')" data-length="short">Short</button>
+                                <button class="tone-option ${currentLength === 'medium' ? 'active' : ''}" onclick="setAILength('medium')" data-length="medium">Medium</button>
+                                <button class="tone-option ${currentLength === 'long' ? 'active' : ''}" onclick="setAILength('long')" data-length="long">Long</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Context Awareness</h3>
+                        <div class="profile-field">
+                            <label>Use email thread history for better responses</label>
+                            <div class="tone-selector">
+                                <button class="tone-option ${(localStorage.getItem('aiContextAwareness') || 'on') === 'on' ? 'active' : ''}" onclick="setAIContextAwareness('on')" data-context="on">On</button>
+                                <button class="tone-option ${(localStorage.getItem('aiContextAwareness') || 'on') === 'off' ? 'active' : ''}" onclick="setAIContextAwareness('off')" data-context="off">Off</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-section">
+                        <h3>Email Signature</h3>
+                        <div class="profile-field">
+                            <label>Add a signature that will be automatically included at the end of AI-generated emails</label>
+                            <div class="signature-input-container">
+                                <textarea id="ai-signature" class="signature-input" placeholder="Enter your signature (e.g., Your Name&#10;Job Title&#10;Company Name&#10;Email: your.email@example.com&#10;Phone: (555) 123-4567)" rows="5">${localStorage.getItem('aiSignature') || ''}</textarea>
+                                <button class="save-signature-btn" onclick="saveAISignature()">Save Signature</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
     }
 }
+
+// Function to set AI tone preference
+function setAITone(tone) {
+    // Get current tone from localStorage
+    const currentTone = localStorage.getItem('aiTone');
+    
+    // If clicking the same tone that's already active, reset to default
+    if (currentTone === tone) {
+        const defaultTone = 'professional';
+        localStorage.setItem('aiTone', defaultTone);
+        
+        // Update UI - remove active class from all buttons
+        document.querySelectorAll('.tone-option[data-tone]').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Add active class to default button
+        const defaultBtn = document.querySelector(`.tone-option[data-tone="${defaultTone}"]`);
+        if (defaultBtn) {
+            defaultBtn.classList.add('active');
+        }
+        
+        console.log(`AI tone reset to default: ${defaultTone}`);
+        return;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('aiTone', tone);
+    
+    // Update UI - remove active class from all buttons
+    document.querySelectorAll('.tone-option[data-tone]').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Add active class to selected button
+    const selectedBtn = document.querySelector(`.tone-option[data-tone="${tone}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
+    
+    // Show confirmation (optional - you can remove this if you want)
+    console.log(`AI tone set to: ${tone}`);
+}
+
+// Make function globally accessible
+window.setAITone = setAITone;
+
+// Function to set AI response length preference
+function setAILength(length) {
+    // Get current length from localStorage
+    const currentLength = localStorage.getItem('aiLength');
+    
+    // If clicking the same length that's already active, reset to default
+    if (currentLength === length) {
+        const defaultLength = 'medium';
+        localStorage.setItem('aiLength', defaultLength);
+        
+        // Update UI - remove active class from all buttons
+        document.querySelectorAll('.tone-option[data-length]').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Add active class to default button
+        const defaultBtn = document.querySelector(`.tone-option[data-length="${defaultLength}"]`);
+        if (defaultBtn) {
+            defaultBtn.classList.add('active');
+        }
+        
+        console.log(`AI response length reset to default: ${defaultLength}`);
+        return;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('aiLength', length);
+    
+    // Update UI - remove active class from all buttons
+    document.querySelectorAll('.tone-option[data-length]').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Add active class to selected button
+    const selectedBtn = document.querySelector(`.tone-option[data-length="${length}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
+    
+    // Show confirmation (optional - you can remove this if you want)
+    console.log(`AI response length set to: ${length}`);
+}
+
+// Make function globally accessible
+window.setAILength = setAILength;
+
+// Function to set AI context awareness preference
+function setAIContextAwareness(context) {
+    // Get current context awareness from localStorage
+    const currentContext = localStorage.getItem('aiContextAwareness');
+    
+    // If clicking the same context that's already active, reset to default
+    if (currentContext === context) {
+        const defaultContext = 'on';
+        localStorage.setItem('aiContextAwareness', defaultContext);
+        
+        // Update UI - remove active class from all buttons
+        document.querySelectorAll('.tone-option[data-context]').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // Add active class to default button
+        const defaultBtn = document.querySelector(`.tone-option[data-context="${defaultContext}"]`);
+        if (defaultBtn) {
+            defaultBtn.classList.add('active');
+        }
+        
+        console.log(`AI context awareness reset to default: ${defaultContext}`);
+        return;
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('aiContextAwareness', context);
+    
+    // Update UI - remove active class from all buttons
+    document.querySelectorAll('.tone-option[data-context]').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Add active class to selected button
+    const selectedBtn = document.querySelector(`.tone-option[data-context="${context}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
+    
+    // Show confirmation (optional - you can remove this if you want)
+    console.log(`AI context awareness set to: ${context}`);
+}
+
+// Make function globally accessible
+window.setAIContextAwareness = setAIContextAwareness;
+
+// Function to save AI signature
+function saveAISignature() {
+    const signatureTextarea = document.getElementById('ai-signature');
+    if (!signatureTextarea) return;
+    
+    const signature = signatureTextarea.value.trim();
+    localStorage.setItem('aiSignature', signature);
+    
+    // Show confirmation
+    const saveBtn = document.querySelector('.save-signature-btn');
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saved!';
+    saveBtn.style.background = '#34a853';
+    
+    setTimeout(() => {
+        saveBtn.textContent = originalText;
+        saveBtn.style.background = '';
+    }, 2000);
+    
+    console.log('AI signature saved');
+}
+
+// Make function globally accessible
+window.saveAISignature = saveAISignature;
 
 function closeProfileSettings() {
     // Hide profile settings container
