@@ -285,10 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize greeting button if user is already authenticated
     if (localStorage.getItem('isAuthenticated') === 'true') {
         const userEmail = localStorage.getItem('userEmail');
-        const greetingBtn = document.getElementById('user-greeting');
-        if (userEmail && greetingBtn) {
-            greetingBtn.textContent = `Hi, ${userEmail}`;
-        }
+        updateGreeting();
     }
     
     // Add styles for email formatting
@@ -555,10 +552,7 @@ async function handleAuthResponse(response) {
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.setItem('userEmail', userEmail);
         
-        const greetingBtn = document.getElementById('user-greeting');
-        if (greetingBtn) {
-            greetingBtn.textContent = `Hi, ${userEmail}`;
-        }
+        updateGreeting();
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('app').style.display = 'block';
         
@@ -4445,12 +4439,13 @@ function openProfileSettings() {
                             <input type="text" id="profile-name" placeholder="Enter your full name" value="${localStorage.getItem('profileName') || ''}">
                         </div>
                         <div class="profile-field">
-                            <label for="profile-title">Job Title:</label>
-                            <input type="text" id="profile-title" placeholder="Enter your job title" value="${localStorage.getItem('profileTitle') || ''}">
+                            <label for="profile-greeting">Greeting Name:</label>
+                            <input type="text" id="profile-greeting" placeholder="Enter name for greeting (e.g., John)" value="${localStorage.getItem('profileGreeting') || ''}">
+                            <small style="display: block; color: #5f6368; font-size: 12px; margin-top: 4px;">This will be used instead of your email in the greeting</small>
                         </div>
                         <div class="profile-field">
-                            <label for="profile-company">Company:</label>
-                            <input type="text" id="profile-company" placeholder="Enter your company name" value="${localStorage.getItem('profileCompany') || ''}">
+                            <label for="profile-title">Job Title:</label>
+                            <input type="text" id="profile-title" placeholder="Enter your job title" value="${localStorage.getItem('profileTitle') || ''}">
                         </div>
                     </div>
                     <div class="profile-section">
@@ -4458,10 +4453,6 @@ function openProfileSettings() {
                         <div class="profile-field">
                             <label for="profile-phone">Phone Number:</label>
                             <input type="tel" id="profile-phone" placeholder="Enter your phone number" value="${localStorage.getItem('profilePhone') || ''}">
-                        </div>
-                        <div class="profile-field">
-                            <label for="profile-website">Website/Portfolio:</label>
-                            <input type="url" id="profile-website" placeholder="https://example.com" value="${localStorage.getItem('profileWebsite') || ''}">
                         </div>
                     </div>
                     <div class="profile-actions">
@@ -4499,19 +4490,36 @@ function openProfileSettings() {
     });
 }
 
+// Function to update the greeting button with greeting name or email
+function updateGreeting() {
+    const greetingBtn = document.getElementById('user-greeting');
+    if (!greetingBtn) return;
+    
+    const greetingName = localStorage.getItem('profileGreeting');
+    const userEmail = localStorage.getItem('userEmail') || window.userEmail;
+    
+    // Use greeting name if available, otherwise use email
+    const displayName = greetingName && greetingName.trim() ? greetingName.trim() : userEmail;
+    
+    if (displayName) {
+        greetingBtn.textContent = `Hi, ${displayName}`;
+    }
+}
+
 function saveProfileSettings() {
     // Save profile settings to localStorage
     const name = document.getElementById('profile-name').value;
+    const greeting = document.getElementById('profile-greeting').value;
     const title = document.getElementById('profile-title').value;
-    const company = document.getElementById('profile-company').value;
     const phone = document.getElementById('profile-phone').value;
-    const website = document.getElementById('profile-website').value;
     
     localStorage.setItem('profileName', name);
+    localStorage.setItem('profileGreeting', greeting);
     localStorage.setItem('profileTitle', title);
-    localStorage.setItem('profileCompany', company);
     localStorage.setItem('profilePhone', phone);
-    localStorage.setItem('profileWebsite', website);
+    
+    // Update greeting button
+    updateGreeting();
     
     // Show success message
     alert('Profile settings saved successfully!');
@@ -4569,12 +4577,13 @@ function switchSettingsTab(tabName) {
                             <input type="text" id="profile-name" placeholder="Enter your full name" value="${localStorage.getItem('profileName') || ''}">
                         </div>
                         <div class="profile-field">
-                            <label for="profile-title">Job Title:</label>
-                            <input type="text" id="profile-title" placeholder="Enter your job title" value="${localStorage.getItem('profileTitle') || ''}">
+                            <label for="profile-greeting">Greeting Name:</label>
+                            <input type="text" id="profile-greeting" placeholder="Enter name for greeting (e.g., John)" value="${localStorage.getItem('profileGreeting') || ''}">
+                            <small style="display: block; color: #5f6368; font-size: 12px; margin-top: 4px;">This will be used instead of your email in the greeting</small>
                         </div>
                         <div class="profile-field">
-                            <label for="profile-company">Company:</label>
-                            <input type="text" id="profile-company" placeholder="Enter your company name" value="${localStorage.getItem('profileCompany') || ''}">
+                            <label for="profile-title">Job Title:</label>
+                            <input type="text" id="profile-title" placeholder="Enter your job title" value="${localStorage.getItem('profileTitle') || ''}">
                         </div>
                     </div>
                     <div class="profile-section">
@@ -4582,10 +4591,6 @@ function switchSettingsTab(tabName) {
                         <div class="profile-field">
                             <label for="profile-phone">Phone Number:</label>
                             <input type="tel" id="profile-phone" placeholder="Enter your phone number" value="${localStorage.getItem('profilePhone') || ''}">
-                        </div>
-                        <div class="profile-field">
-                            <label for="profile-website">Website/Portfolio:</label>
-                            <input type="url" id="profile-website" placeholder="https://example.com" value="${localStorage.getItem('profileWebsite') || ''}">
                         </div>
                     </div>
                     <div class="profile-actions">
