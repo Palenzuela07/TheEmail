@@ -2,6 +2,15 @@
 let selectedEmails = new Set();
 let emailAttachments = []; // Store attachments for the current email
 
+// Cached emails for Gmail-style search suggestions (always real data, no mocks)
+let currentEmailMessages = []; // currently unused but kept for potential future use
+let searchSuggestionIndex = -1;
+
+// Global search index for suggestions (up to the last ~500 emails)
+let searchIndexEmails = [];
+let searchIndexLoaded = false;
+let searchIndexLoading = false;
+
 // Function to reset compose window form fields
 function resetComposeWindow() {
     const toField = document.getElementById('compose-to');
@@ -680,6 +689,101 @@ async function listEmails(page = 1, filter = 'primary', retryCount = 0) {
     }
 }
 
+// Build a search index of recent emails for Gmail-style suggestions (up to maxCount).
+// This fetches up to `maxCount` of the most recent messages across your mailbox so
+// the dropdown can search "any" recent email (not just the current tab).
+async function buildSearchIndex(maxCount = 500) {
+    try {
+        if (searchIndexLoading) {
+            return;
+        }
+        searchIndexLoading = true;
+        searchIndexEmails = [];
+
+        let pageToken = null;
+
+        while (searchIndexEmails.length < maxCount) {
+            const batchSize = Math.min(100, maxCount - searchIndexEmails.length);
+
+            // Empty query -> most recent messages from your entire mailbox
+            const listResponse = await gapi.client.gmail.users.messages.list({
+                userId: 'me',
+                maxResults: batchSize,
+                q: '',
+                pageToken: pageToken
+            });
+
+            const messages = listResponse.result.messages;
+            if (!messages || messages.length === 0) {
+                break;
+            }
+
+            const fullMessages = await Promise.all(
+                messages.map(msg => gapi.client.gmail.users.messages.get({
+                    userId: 'me',
+                    id: msg.id,
+                    format: 'metadata',
+                    metadataHeaders: ['Subject', 'From', 'Date']
+                }))
+            );
+
+            fullMessages.forEach(fm => {
+                const result = fm.result;
+                if (!result || !result.payload || !Array.isArray(result.payload.headers)) return;
+
+                const headers = result.payload.headers;
+                const subject = headers.find(h => h.name === 'Subject')?.value || '(no subject)';
+                const from = headers.find(h => h.name === 'From')?.value || '(no sender)';
+                const snippet = result.snippet || '';
+
+                searchIndexEmails.push({
+                    id: result.id,
+                    from,
+                    subject,
+                    snippet
+                });
+            });
+
+            pageToken = listResponse.result.nextPageToken;
+            if (!pageToken) {
+                break;
+            }
+        }
+
+        searchIndexLoaded = true;
+        console.log('Search index built. Emails indexed:', searchIndexEmails.length);
+    } catch (error) {
+        console.error('Error building search index for suggestions:', error);
+    } finally {
+        searchIndexLoading = false;
+    }
+}
+
+// Schedule building the search index for suggestions only after
+// the inbox has rendered and the browser has some idle time.
+function scheduleSearchIndexBuild() {
+    // Avoid duplicate builds
+    if (searchIndexLoaded || searchIndexLoading) {
+        return;
+    }
+
+    const startBuild = () => {
+        if (searchIndexLoaded || searchIndexLoading) return;
+        console.log('Starting background search index build after idle...');
+        buildSearchIndex().catch(err => {
+            console.error('Failed to build search index:', err);
+        });
+    };
+
+    // Prefer requestIdleCallback so we don't compete with initial render
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        window.requestIdleCallback(startBuild, { timeout: 5000 });
+    } else {
+        // Fallback: wait a bit after login/refresh to reduce contention
+        setTimeout(startBuild, 2000);
+    }
+}
+
 function getQueryForFilter(filter) {
     switch (filter) {
         case 'starred':
@@ -1105,8 +1209,8 @@ async function openEmail(emailId) {
         // Helper function to create message HTML
         function createMessageHtml(msg) {
             const headers = msg.payload.headers;
-            const from = headers.find(header => header.name === 'From')?.value || '';
-            const date = headers.find(header => header.name === 'Date')?.value || '';
+        const from = headers.find(header => header.name === 'From')?.value || '';
+        const date = headers.find(header => header.name === 'Date')?.value || '';
             const content = getBody(msg.payload);
             
             // Debug: Log content type and preview
@@ -2058,12 +2162,12 @@ async function openEmail(emailId) {
                     <div class="email-full-metadata-row">
                         <span class="email-full-metadata-label">From:</span>
                         <span class="email-full-metadata-value">${senderName}</span>
-                    </div>
+                </div>
                     ${to ? `
                     <div class="email-full-metadata-row">
                         <span class="email-full-metadata-label">To:</span>
                         <span class="email-full-metadata-value">${to}</span>
-                    </div>
+            </div>
                     ` : ''}
                     <div class="email-full-metadata-row">
                         <span class="email-full-metadata-label">Date:</span>
@@ -3041,8 +3145,8 @@ async function sendEmail() {
             emailContent = [
                 ...headers,
                 '', // Empty line separates headers from body
-                body
-            ].join('\r\n');
+            body
+        ].join('\r\n');
         }
 
         console.log('Email content:', emailContent.substring(0, 500) + '...');
@@ -3740,40 +3844,36 @@ async function performSearch() {
 
         // Perform search using the query
         const response = await gapi.client.gmail.users.messages.list({
-            'userId': 'me',
-            'maxResults': EMAILS_PER_PAGE,
-            'q': searchQuery
+            userId: 'me',
+            maxResults: EMAILS_PER_PAGE,
+            q: searchQuery
         });
 
-        if (!response.result.messages) {
-            displayEmails([]);
+        if (!response.result.messages || response.result.messages.length === 0) {
+            displayEmails({ messages: [], resultSizeEstimate: 0 });
             return;
         }
 
-        const emails = await Promise.all(response.result.messages.map(async message => {
+        // Fetch metadata for each matching message in the same shape used by listEmails
+        const messages = await Promise.all(
+            response.result.messages.map(async (message) => {
             const emailDetails = await gapi.client.gmail.users.messages.get({
-                'userId': 'me',
-                'id': message.id,
-                'format': 'metadata',
-                'metadataHeaders': ['Subject', 'From', 'Date']
-            });
-            
-            const headers = emailDetails.result.payload.headers;
-            const isStarred = emailDetails.result.labelIds.includes('STARRED');
-            const isImportant = emailDetails.result.labelIds.includes('IMPORTANT');
+                    userId: 'me',
+                    id: message.id,
+                    format: 'metadata',
+                    metadataHeaders: ['Subject', 'From', 'Date']
+                });
+                return emailDetails.result; // full Gmail message object
+            })
+        );
 
-            return {
-                id: message.id,
-                subject: headers.find(header => header.name === 'Subject')?.value || '(no subject)',
-                from: headers.find(header => header.name === 'From')?.value || '(no sender)',
-                date: headers.find(header => header.name === 'Date')?.value || '',
-                snippet: emailDetails.result.snippet || 'No preview available',
-                isStarred,
-                isImportant
-            };
-        }));
+        const emailsForDisplay = {
+            messages,
+            nextPageToken: null,
+            resultSizeEstimate: response.result.resultSizeEstimate || messages.length
+        };
 
-        displayEmails(emails);
+        displayEmails(emailsForDisplay);
 
     } catch (error) {
         console.error('Error performing search:', error);
@@ -3784,6 +3884,171 @@ async function performSearch() {
         `;
     }
 }
+
+// Gmail-style search suggestions (based on currently visible emails in the list)
+function clearSearchSuggestions() {
+    const container = document.getElementById('search-suggestions');
+    if (!container) return;
+    container.innerHTML = '';
+    container.style.display = 'none';
+    searchSuggestionIndex = -1;
+}
+
+function updateSearchSuggestions(term) {
+    const container = document.getElementById('search-suggestions');
+    if (!container) return;
+
+    const query = (term || '').trim().toLowerCase();
+
+    if (!query) {
+        clearSearchSuggestions();
+        return;
+    }
+
+    const matches = [];
+
+    // Prefer using the global search index of recent emails if available
+    const sourceEmails = searchIndexLoaded && Array.isArray(searchIndexEmails) && searchIndexEmails.length
+        ? searchIndexEmails
+        : null;
+
+    if (sourceEmails) {
+        for (let i = 0; i < sourceEmails.length && matches.length < 5; i++) {
+            const e = sourceEmails[i];
+            const fromLower = (e.from || '').toLowerCase();
+            const subjectLower = (e.subject || '').toLowerCase();
+            const snippetLower = (e.snippet || '').toLowerCase();
+
+            const haystack = `${fromLower} ${subjectLower} ${snippetLower}`;
+
+            if (haystack.includes(query)) {
+                matches.push({
+                    id: e.id,
+                    from: e.from,
+                    subject: e.subject,
+                    snippet: e.snippet
+                });
+            }
+        }
+    } else {
+        // Fallback: search only within currently visible emails in the list
+        const emailElements = Array.from(document.querySelectorAll('#emailList .email-item'));
+        for (const el of emailElements) {
+            const id = el.getAttribute('data-id') || (el.id ? el.id.replace(/^email-/, '') : '');
+            const fromEl = el.querySelector('.email-sender');
+            const subjectEl = el.querySelector('.email-subject');
+            const snippetEl = el.querySelector('.email-snippet');
+
+            const from = fromEl ? fromEl.textContent.trim() : '';
+            const subject = subjectEl ? subjectEl.textContent.trim() : '';
+            const snippet = snippetEl ? snippetEl.textContent.trim() : '';
+
+            const haystack = `${from} ${subject} ${snippet}`.toLowerCase();
+
+            if (haystack.includes(query)) {
+                matches.push({ id, from, subject, snippet });
+                if (matches.length >= 5) break;
+            }
+        }
+    }
+
+    container.innerHTML = '';
+
+    if (matches.length === 0) {
+        clearSearchSuggestions();
+        return;
+    }
+
+    matches.forEach((m, index) => {
+        const item = document.createElement('div');
+        item.className = 'search-suggestion-item';
+        item.dataset.index = String(index);
+        item.dataset.id = m.id || '';
+        item.innerHTML = `
+            <div class="search-suggestion-top">
+                <span class="search-suggestion-subject">${m.subject || '(No subject)'}</span>
+                <span class="search-suggestion-from">${m.from || ''}</span>
+            </div>
+            <div class="search-suggestion-snippet">
+                ${m.snippet || ''}
+            </div>
+        `;
+
+        // Use mousedown so it fires even if the input loses focus
+        item.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            clearSearchSuggestions();
+            if (m.id) {
+                openEmail(m.id);
+            }
+        });
+
+        container.appendChild(item);
+    });
+
+    // Add a small footer so users know they can search for more results
+    const footer = document.createElement('div');
+    footer.className = 'search-suggestions-footer';
+    footer.textContent = 'Showing top 5 recent matches. Press Enter or click Search to see more results.';
+    container.appendChild(footer);
+
+    container.style.display = 'block';
+    searchSuggestionIndex = -1;
+}
+
+function handleSearchInput(event) {
+    const value = event && event.target ? event.target.value : '';
+    updateSearchSuggestions(value);
+}
+
+function handleSearchKeyDown(event) {
+    const container = document.getElementById('search-suggestions');
+    const items = container ? Array.from(container.querySelectorAll('.search-suggestion-item')) : [];
+
+    if (event.key === 'Enter') {
+        if (items.length > 0 && searchSuggestionIndex >= 0 && searchSuggestionIndex < items.length) {
+            event.preventDefault();
+            const activeItem = items[searchSuggestionIndex];
+            const id = activeItem && activeItem.dataset.id;
+            clearSearchSuggestions();
+            if (id) {
+                openEmail(id);
+            } else {
+                performSearch();
+            }
+        } else {
+            // No active suggestion, just perform a full search
+            performSearch();
+        }
+    } else if (event.key === 'ArrowDown') {
+        if (items.length === 0) return;
+        event.preventDefault();
+        searchSuggestionIndex = (searchSuggestionIndex + 1) % items.length;
+        items.forEach((el, idx) => el.classList.toggle('active', idx === searchSuggestionIndex));
+    } else if (event.key === 'ArrowUp') {
+        if (items.length === 0) return;
+        event.preventDefault();
+        searchSuggestionIndex = (searchSuggestionIndex - 1 + items.length) % items.length;
+        items.forEach((el, idx) => el.classList.toggle('active', idx === searchSuggestionIndex));
+    } else if (event.key === 'Escape') {
+        clearSearchSuggestions();
+    }
+}
+
+// Hide the search suggestions dropdown if the user clicks outside
+document.addEventListener('click', (event) => {
+    const searchBar = document.querySelector('.search-bar');
+    const suggestions = document.getElementById('search-suggestions');
+    if (!searchBar || !suggestions) return;
+
+    const target = event.target;
+    const clickedInsideSearch =
+        searchBar.contains(target) || suggestions.contains(target);
+
+    if (!clickedInsideSearch) {
+        clearSearchSuggestions();
+    }
+});
 
 async function toggleStar(emailId, isCurrentlyStarred) {
     try {
@@ -4007,7 +4272,7 @@ function getBody(payload) {
         // Handle multipart messages
     if (payload.parts) {
             // First try to find HTML part
-            for (let part of payload.parts) {
+        for (let part of payload.parts) {
                 if (part.mimeType === 'text/html' && part.body && part.body.data) {
                     const htmlContent = decodeEmailContent(part.body.data);
                     console.log('Found HTML part, length:', htmlContent.length);
@@ -4517,10 +4782,10 @@ function openProfileSettings() {
             </div>
             ` : `
             <div class="settings-tab-content" id="ai-tab-content">
-                <div class="settings-header">
-                    <h2>AI Settings</h2>
-                </div>
-                <div class="settings-content">
+        <div class="settings-header">
+            <h2>AI Settings</h2>
+        </div>
+        <div class="settings-content">
                     <div class="profile-section">
                         <h3>Email Tone</h3>
                         <div class="profile-field">

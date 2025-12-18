@@ -1779,18 +1779,23 @@
             color: gold;
         }
 
+        .search-wrapper {
+            position: relative;
+            max-width: 600px;
+            width: 90%;
+            margin: 16px auto 4px auto;
+        }
+
         .search-bar {
             display: flex;
             align-items: center;
             padding: 8px 16px;
             background: #f1f3f4;
             border-radius: 24px;
-            margin: 16px auto;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
-            width: 90%;
+            width: 100%;
         }
-
+        
         #search-input {
             flex: 1;
             border: none;
@@ -1800,11 +1805,11 @@
             outline: none;
             color: #202124;
         }
-
+        
         #search-input::placeholder {
             color: #5f6368;
         }
-
+        
         .search-bar button {
             background: none;
             border: none;
@@ -1816,12 +1821,77 @@
             align-items: center;
             justify-content: center;
         }
-
+        
         .search-bar button:hover {
             background: #e8f0fe;
             border-radius: 50%;
         }
+        
+        /* Gmail-style search suggestions dropdown */
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            background: #ffffff;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: none;
+            z-index: 20;
+            overflow: hidden;
+            font-size: 14px;
+        }
+        
+        .search-suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        
+        .search-suggestion-item:hover,
+        .search-suggestion-item.active {
+            background: #e8f0fe;
+        }
+        
+        .search-suggestion-top {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            color: #202124;
+        }
+        
+        .search-suggestion-subject {
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .search-suggestion-from {
+            color: #5f6368;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        .search-suggestion-snippet {
+            color: #5f6368;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
 
+        .search-suggestions-footer {
+            padding: 6px 12px 8px 12px;
+            border-top: 1px solid #eceff1;
+            font-size: 12px;
+            color: #5f6368;
+            background: #fafafa;
+        }
+        
         #ai-chat-area {
             position: relative;
             height: calc(100% - 35px); /* Subtract header height */
@@ -3353,9 +3423,19 @@
                         <button class="signout-btn" onclick="handleSignOut()">Sign Out</button>
                     </div>
                 </div>
-                <div class="search-bar">
-                    <input type="text" id="search-input" placeholder="Search emails..." onkeypress="handleSearch(event)">
-                    <button onclick="performSearch()">Search</button>
+                <div class="search-wrapper">
+                    <div class="search-bar">
+                        <input 
+                            type="text" 
+                            id="search-input" 
+                            placeholder="Search emails..." 
+                            oninput="handleSearchInput(event)" 
+                        onkeydown="handleSearchKeyDown(event)"
+                        onblur="clearSearchSuggestions()">
+                        <button onclick="performSearch()">Search</button>
+                    </div>
+                    <!-- Gmail-style search suggestions dropdown -->
+                    <div id="search-suggestions" class="search-suggestions"></div>
                 </div>
                 <div class="email-tabs" id="email-tabs">
                     <button class="refresh-btn" onclick="refreshEmails()">
