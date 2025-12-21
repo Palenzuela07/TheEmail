@@ -797,9 +797,34 @@
             text-decoration: underline;
         }
 
-        .email-full-body img {
+        .email-full-body img,
+        .message-content img {
             max-width: 100% !important;
             height: auto !important;
+            display: inline-block;
+        }
+        
+        /* Handle broken images - show placeholder instead of blue "?" */
+        .message-content img[src=""],
+        .message-content img:not([src]) {
+            background: #f1f3f4;
+            border: 1px dashed #dadce0;
+            padding: 8px;
+            min-height: 40px;
+        }
+        
+        /* Style images with missing CID references */
+        .message-content img.cid-image-missing {
+            background: #fce8e6;
+            border: 1px dashed #d93025;
+            padding: 8px;
+            min-height: 40px;
+            opacity: 0.7;
+        }
+        
+        /* Ensure images can load from blob URLs and remote URLs */
+        .message-content img {
+            object-fit: contain;
         }
 
         .email-full-body a {

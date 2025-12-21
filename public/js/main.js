@@ -11,6 +11,9 @@ let searchIndexEmails = [];
 let searchIndexLoaded = false;
 let searchIndexLoading = false;
 
+// Track blob URLs for inline attachments to clean up on email close
+let currentEmailBlobUrls = [];
+
 // Function to reset compose window form fields
 function resetComposeWindow() {
     const toField = document.getElementById('compose-to');
@@ -1101,6 +1104,16 @@ async function changePage(newPage) {
 
 async function openEmail(emailId) {
     try {
+        // Clean up any previous blob URLs before opening a new email
+        currentEmailBlobUrls.forEach(url => {
+            try {
+                URL.revokeObjectURL(url);
+            } catch (e) {
+                console.warn('Error revoking blob URL:', e);
+            }
+        });
+        currentEmailBlobUrls = [];
+        
         currentEmail = emailId;
         
         // Get references to DOM elements
@@ -1206,12 +1219,15 @@ async function openEmail(emailId) {
         let threadHtml = '';
         const hasThreadHistory = messages.length > 1;
         
+        // Store message content for iframe injection
+        const messageContents = new Map();
+        
         // Helper function to create message HTML
-        function createMessageHtml(msg) {
+        async function createMessageHtml(msg) {
             const headers = msg.payload.headers;
         const from = headers.find(header => header.name === 'From')?.value || '';
         const date = headers.find(header => header.name === 'Date')?.value || '';
-            const content = getBody(msg.payload);
+            let content = getBody(msg.payload);
             
             // Debug: Log content type and preview
             console.log('Email content type:', typeof content);
@@ -1221,6 +1237,29 @@ async function openEmail(emailId) {
             
             // Extract attachments for this message
             const attachments = getAttachments(msg.payload, msg.id);
+            
+            // Extract inline attachments (CID attachments) and process images
+            const inlineAttachments = await getInlineAttachments(msg.payload, msg.id);
+            console.log('Found inline attachments:', inlineAttachments.size);
+            if (inlineAttachments.size > 0) {
+                console.log('Available CIDs:', Array.from(inlineAttachments.keys()));
+            }
+            
+            // Process HTML content to replace CID references with blob URLs
+            if (content && typeof content === 'string' && content.includes('<')) {
+                // Log all img tags with CID references before processing
+                const tempCheck = document.createElement('div');
+                tempCheck.innerHTML = content;
+                const cidImages = tempCheck.querySelectorAll('img[src^="cid:"], img[src*="cid:"]');
+                if (cidImages.length > 0) {
+                    console.log(`Found ${cidImages.length} images with CID references:`);
+                    cidImages.forEach((img, idx) => {
+                        console.log(`  Image ${idx + 1}:`, img.getAttribute('src'));
+                    });
+                }
+                
+                content = processEmailImages(content, inlineAttachments);
+            }
 
             // Extract sender name from email
             const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
@@ -1252,7 +1291,13 @@ async function openEmail(emailId) {
             // Ensure content is a string and not undefined/null
             const safeContent = content || 'No content available';
             
-            // Create the HTML structure - content should be inserted as-is for HTML rendering
+            // Create a unique ID for this message's iframe
+            const messageIframeId = `email-iframe-${msg.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Store content for later injection into iframe
+            messageContents.set(messageIframeId, safeContent);
+            
+            // Create the HTML structure with sandboxed iframe for email content
             return `
                 <div class="email-message">
                     <div class="message-header">
@@ -1262,14 +1307,23 @@ async function openEmail(emailId) {
                         <div class="message-date">${safeDate}</div>
                     </div>
                     ${attachmentsHtml}
-                    <div class="message-content">${safeContent}</div>
+                    <div class="message-content-wrapper">
+                        <iframe 
+                            id="${messageIframeId}"
+                            class="email-content-iframe"
+                            sandbox="allow-same-origin allow-scripts allow-popups-to-escape-sandbox"
+                            scrolling="no"
+                            frameborder="0"
+                            loading="lazy">
+                        </iframe>
+                    </div>
                 </div>
             `;
         }
         
         // Show the most recent email first (index 0 after sorting)
         if (messages.length > 0) {
-            threadHtml += createMessageHtml(messages[0]);
+            threadHtml += await createMessageHtml(messages[0]);
         }
         
         // If there are more messages, show thread history
@@ -1284,7 +1338,7 @@ async function openEmail(emailId) {
             
             // Show the rest of the messages (older ones)
             for (let i = 1; i < messages.length; i++) {
-                threadHtml += createMessageHtml(messages[i]);
+                threadHtml += await createMessageHtml(messages[i]);
             }
         }
 
@@ -1351,6 +1405,21 @@ async function openEmail(emailId) {
                 font-family: Arial, sans-serif;
             }
 
+            .message-content-wrapper {
+                margin-top: 12px;
+                width: 100%;
+                position: relative;
+                background: white;
+            }
+            
+            .email-content-iframe {
+                width: 100%;
+                border: none;
+                display: block;
+                background: white;
+                min-height: 50px;
+            }
+            
             .message-content {
                 font-family: Arial, Helvetica, sans-serif;
                 font-size: 14px;
@@ -2180,6 +2249,122 @@ async function openEmail(emailId) {
             </div>
         `;
         
+        // Inject email content into iframes with CSS reset for sandboxing
+        setTimeout(() => {
+            messageContents.forEach((content, iframeId) => {
+                const iframe = document.getElementById(iframeId);
+                if (iframe && iframe.contentDocument) {
+                    try {
+                        const doc = iframe.contentDocument;
+                        const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* CSS Reset to prevent email CSS from affecting app UI */
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            all: revert-layer;
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            overflow: visible;
+            background: white !important;
+            color: #202124 !important;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        /* Ensure email content is contained */
+        body {
+            padding: 12px;
+            box-sizing: border-box;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        /* Prevent email styles from breaking layout */
+        * {
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        
+        img {
+            max-width: 100% !important;
+            height: auto !important;
+            display: inline-block;
+        }
+        
+        /* Allow email content to display but prevent global resets */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    ${content}
+</body>
+</html>
+                        `;
+                        doc.open();
+                        doc.write(htmlContent);
+                        doc.close();
+                        
+                        // Auto-resize iframe to fit content
+                        const resizeIframe = () => {
+                            try {
+                                const body = doc.body;
+                                const html = doc.documentElement;
+                                const height = Math.max(
+                                    body.scrollHeight,
+                                    body.offsetHeight,
+                                    html.clientHeight,
+                                    html.scrollHeight,
+                                    html.offsetHeight
+                                );
+                                iframe.style.height = height + 'px';
+                            } catch (e) {
+                                console.warn('Error resizing iframe:', e);
+                            }
+                        };
+                        
+                        // Resize after content loads
+                        iframe.onload = resizeIframe;
+                        setTimeout(resizeIframe, 100);
+                        setTimeout(resizeIframe, 500);
+                        
+                        // Watch for content changes (e.g., images loading)
+                        const observer = new MutationObserver(resizeIframe);
+                        observer.observe(doc.body, {
+                            childList: true,
+                            subtree: true,
+                            attributes: true,
+                            attributeFilter: ['src', 'style']
+                        });
+                        
+                        // Also resize when images load
+                        const images = doc.querySelectorAll('img');
+                        images.forEach(img => {
+                            img.onload = resizeIframe;
+                            img.onerror = resizeIframe;
+                        });
+                        
+                        console.log(`Injected content into iframe: ${iframeId}`);
+                    } catch (e) {
+                        console.error(`Error injecting content into iframe ${iframeId}:`, e);
+                    }
+                } else {
+                    console.warn(`Iframe not found or not accessible: ${iframeId}`);
+                }
+            });
+            messageContents.clear(); // Clear the map after injection
+        }, 50);
+        
         // Fix dark backgrounds with white text after content is inserted
         // Run multiple times to catch all elements, including dynamically loaded ones
         setTimeout(() => {
@@ -2317,6 +2502,16 @@ function closeEmail() {
     emailViewer.style.display = 'none';
     emailViewer.classList.remove('show');
     document.getElementById('email-viewer-content').innerHTML = ''; // Clear content
+    
+    // Clean up blob URLs to prevent memory leaks
+    currentEmailBlobUrls.forEach(url => {
+        try {
+            URL.revokeObjectURL(url);
+        } catch (e) {
+            console.warn('Error revoking blob URL:', e);
+        }
+    });
+    currentEmailBlobUrls = [];
     
     // Hide resize divider
     const resizeDivider = document.getElementById('resize-divider');
@@ -4340,13 +4535,14 @@ function decodeEmailContent(data) {
         // Basic HTML sanitization:
         // - strip scripts
         // - strip inline event handlers
-        // - strip javascript: URLs
+        // - strip javascript: URLs (but preserve data:image/*;base64)
         // - strip color-scheme and color-related meta tags
         // Layout and sizing are handled via CSS instead of rewriting tags here.
         let sanitized = htmlContent
             .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
             .replace(/on\w+="[^"]*"/gi, '')
             .replace(/on\w+='[^']*'/gi, '')
+            // Only strip javascript: URLs, preserve data:image/*;base64
             .replace(/javascript:/gi, '');
         
         // Strip color-scheme and dark mode meta tags
@@ -4413,6 +4609,309 @@ function getAttachments(payload, messageId) {
     }
     
     return attachments;
+}
+
+// Function to extract inline attachments (CID attachments) from email payload
+async function getInlineAttachments(payload, messageId) {
+    const inlineAttachments = new Map(); // Map of CID -> attachment data
+    
+    if (!payload) return inlineAttachments;
+    
+    async function extractFromParts(parts, messageId) {
+        if (!parts) return;
+        
+        for (const part of parts) {
+            // Check if this part has a Content-ID header (inline attachment)
+            const headers = part.headers || [];
+            const contentIdHeader = headers.find(h => h.name && h.name.toLowerCase() === 'content-id');
+            const contentDispositionHeader = headers.find(h => h.name && h.name.toLowerCase() === 'content-disposition');
+            
+            // Check if it's an image or inline attachment
+            const isImage = part.mimeType && part.mimeType.startsWith('image/');
+            const hasContentId = contentIdHeader && contentIdHeader.value;
+            const isInlineDisposition = contentDispositionHeader && contentDispositionHeader.value && 
+                                      contentDispositionHeader.value.toLowerCase().includes('inline');
+            const hasNoDisposition = !contentDispositionHeader || !contentDispositionHeader.value;
+            
+            // Consider it inline if:
+            // 1. Has Content-ID header, OR
+            // 2. Is an image with inline disposition, OR
+            // 3. Is an image with no disposition (often inline in multipart/related)
+            const isInline = hasContentId || (isImage && (isInlineDisposition || hasNoDisposition));
+            
+            if (isInline && part.body) {
+                let cid = null;
+                
+                // Extract CID from Content-ID header (format: <cid-value>)
+                if (contentIdHeader && contentIdHeader.value) {
+                    cid = contentIdHeader.value.trim();
+                    // Remove angle brackets if present
+                    cid = cid.replace(/^<|>$/g, '');
+                    console.log('Found Content-ID:', cid, 'MIME type:', part.mimeType);
+                }
+                
+                // If no CID but has attachmentId, use it as fallback
+                if (!cid && part.body.attachmentId) {
+                    cid = part.body.attachmentId;
+                    console.log('Using attachmentId as CID fallback:', cid);
+                }
+                
+                // If still no CID but it's an image, generate one from attachmentId
+                if (!cid && isImage && part.body.attachmentId) {
+                    cid = part.body.attachmentId;
+                }
+                
+                if (cid) {
+                    let blobUrl = null;
+                    
+                    // Try to get attachment data
+                    if (part.body.attachmentId) {
+                        // Fetch the attachment data
+                        try {
+                            const response = await gapi.client.gmail.users.messages.attachments.get({
+                                'userId': 'me',
+                                'messageId': messageId,
+                                'id': part.body.attachmentId
+                            });
+                            
+                            const attachment = response.result;
+                            const data = attachment.data;
+                            
+                            // Decode base64url to base64
+                            const base64Data = data.replace(/-/g, '+').replace(/_/g, '/');
+                            
+                            // Convert to blob URL
+                            const byteCharacters = atob(base64Data);
+                            const byteNumbers = new Array(byteCharacters.length);
+                            for (let i = 0; i < byteCharacters.length; i++) {
+                                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            }
+                            const byteArray = new Uint8Array(byteNumbers);
+                            const blob = new Blob([byteArray], { type: part.mimeType || 'application/octet-stream' });
+                            blobUrl = URL.createObjectURL(blob);
+                            
+                            // Track blob URL for cleanup
+                            currentEmailBlobUrls.push(blobUrl);
+                            
+                            console.log(`Created blob URL for CID: ${cid}, MIME: ${part.mimeType}`);
+                        } catch (error) {
+                            console.error('Error fetching inline attachment:', error, 'CID:', cid);
+                        }
+                    } else if (part.body.data) {
+                        // Inline attachment with embedded data (base64)
+                        try {
+                            const base64Data = part.body.data.replace(/-/g, '+').replace(/_/g, '/');
+                            const byteCharacters = atob(base64Data);
+                            const byteNumbers = new Array(byteCharacters.length);
+                            for (let i = 0; i < byteCharacters.length; i++) {
+                                byteNumbers[i] = byteCharacters.charCodeAt(i);
+                            }
+                            const byteArray = new Uint8Array(byteNumbers);
+                            const blob = new Blob([byteArray], { type: part.mimeType || 'application/octet-stream' });
+                            blobUrl = URL.createObjectURL(blob);
+                            
+                            // Track blob URL for cleanup
+                            currentEmailBlobUrls.push(blobUrl);
+                            
+                            console.log(`Created blob URL from embedded data for CID: ${cid}`);
+                        } catch (error) {
+                            console.error('Error processing inline attachment data:', error, 'CID:', cid);
+                        }
+                    }
+                    
+                    if (blobUrl) {
+                        inlineAttachments.set(cid, {
+                            blobUrl: blobUrl,
+                            mimeType: part.mimeType || 'application/octet-stream',
+                            attachmentId: part.body.attachmentId || null
+                        });
+                        
+                        // Also add variations of the CID for better matching
+                        // Add with angle brackets
+                        if (!cid.startsWith('<')) {
+                            inlineAttachments.set(`<${cid}>`, {
+                                blobUrl: blobUrl,
+                                mimeType: part.mimeType || 'application/octet-stream',
+                                attachmentId: part.body.attachmentId || null
+                            });
+                        }
+                        // Add without angle brackets if it had them
+                        if (cid.startsWith('<')) {
+                            const cleanCid = cid.replace(/^<|>$/g, '');
+                            inlineAttachments.set(cleanCid, {
+                                blobUrl: blobUrl,
+                                mimeType: part.mimeType || 'application/octet-stream',
+                                attachmentId: part.body.attachmentId || null
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Recursively check nested parts
+            if (part.parts) {
+                await extractFromParts(part.parts, messageId);
+            }
+        }
+    }
+    
+    if (payload.parts) {
+        await extractFromParts(payload.parts, messageId);
+    }
+    
+    console.log(`Total inline attachments found: ${inlineAttachments.size}`, Array.from(inlineAttachments.keys()));
+    return inlineAttachments;
+}
+
+// Function to process HTML content and replace CID references with blob URLs
+function processEmailImages(htmlContent, inlineAttachments) {
+    if (!htmlContent || typeof htmlContent !== 'string') {
+        return htmlContent;
+    }
+    
+    // If no inline attachments, return content as-is (but still process for safety)
+    if (!inlineAttachments || inlineAttachments.size === 0) {
+        return htmlContent;
+    }
+    
+    // Create a temporary DOM element to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // Find all img tags
+    const images = tempDiv.querySelectorAll('img');
+    
+    images.forEach((img, idx) => {
+        const src = img.getAttribute('src');
+        if (!src) {
+            console.warn(`Image ${idx + 1} has no src attribute`);
+            return;
+        }
+        
+        // Handle CID references (cid:XXXX or cid:XXXX@domain)
+        if (src.toLowerCase().startsWith('cid:')) {
+            // Extract CID value (remove 'cid:' prefix and any @domain part)
+            const cidMatch = src.match(/^cid:(.+?)(?:@.*)?$/i);
+            if (cidMatch) {
+                let cid = cidMatch[1].trim();
+                const originalCid = cid;
+                
+                // Try exact match first
+                let attachment = inlineAttachments.get(cid);
+                
+                // If no exact match, try without angle brackets (some emails have <cid> format)
+                if (!attachment) {
+                    const cleanCid = cid.replace(/^<|>$/g, '');
+                    attachment = inlineAttachments.get(cleanCid);
+                    if (attachment) cid = cleanCid;
+                }
+                
+                // Try with angle brackets if it didn't have them
+                if (!attachment && !cid.startsWith('<')) {
+                    attachment = inlineAttachments.get(`<${cid}>`);
+                    if (attachment) cid = `<${cid}>`;
+                }
+                
+                // Try case-insensitive match
+                if (!attachment) {
+                    for (const [key, value] of inlineAttachments.entries()) {
+                        if (key.toLowerCase() === originalCid.toLowerCase()) {
+                            attachment = value;
+                            cid = key;
+                            break;
+                        }
+                    }
+                }
+                
+                // Try partial match (in case CID has extra characters)
+                if (!attachment) {
+                    for (const [key, value] of inlineAttachments.entries()) {
+                        const cleanKey = key.replace(/^<|>$/g, '').toLowerCase();
+                        const cleanOriginal = originalCid.replace(/^<|>$/g, '').toLowerCase();
+                        if (cleanKey === cleanOriginal || cleanKey.includes(cleanOriginal) || cleanOriginal.includes(cleanKey)) {
+                            attachment = value;
+                            cid = key;
+                            break;
+                        }
+                    }
+                }
+                
+                if (attachment && attachment.blobUrl) {
+                    // Set up error handler in case blob URL fails
+                    img.onerror = function() {
+                        console.error(`Failed to load blob URL for CID: ${originalCid}`);
+                        // Try to reload once
+                        setTimeout(() => {
+                            if (this.src === attachment.blobUrl) {
+                                this.src = attachment.blobUrl + '?retry=' + Date.now();
+                            }
+                        }, 100);
+                    };
+                    img.onload = function() {
+                        console.log(`✓ Successfully loaded image for CID: ${originalCid}`);
+                    };
+                    img.src = attachment.blobUrl;
+                    console.log(`✓ Replaced CID "${originalCid}" (matched as "${cid}") with blob URL`);
+                } else {
+                    console.warn(`✗ No attachment found for CID: "${originalCid}". Available CIDs:`, Array.from(inlineAttachments.keys()));
+                    // Try to find similar CIDs for debugging
+                    const similarCids = Array.from(inlineAttachments.keys()).filter(k => 
+                        k.toLowerCase().includes(originalCid.toLowerCase()) || 
+                        originalCid.toLowerCase().includes(k.toLowerCase())
+                    );
+                    if (similarCids.length > 0) {
+                        console.warn(`  Similar CIDs found:`, similarCids);
+                    }
+                    // Mark as failed but keep visible for debugging
+                    img.alt = `Image not found (CID: ${originalCid})`;
+                    img.title = `CID not found: ${originalCid}`;
+                    // Add a class to style broken CID images
+                    img.classList.add('cid-image-missing');
+                }
+            } else {
+                console.warn(`Could not parse CID from src: ${src}`);
+            }
+        } else if (src.startsWith('data:image')) {
+            console.log(`Image ${idx + 1} uses base64 data URI (preserved)`);
+        } else if (src.startsWith('http://') || src.startsWith('https://')) {
+            console.log(`Image ${idx + 1} uses remote URL: ${src.substring(0, 50)}...`);
+        } else {
+            console.warn(`Image ${idx + 1} has unexpected src format: ${src.substring(0, 50)}`);
+        }
+    });
+    
+    // Also check for CID references in CSS background-image and other attributes
+    // This handles cases where images are embedded in style attributes
+    const allElements = tempDiv.querySelectorAll('*');
+    allElements.forEach(el => {
+        // Check style attribute for background-image with CID
+        const style = el.getAttribute('style');
+        if (style && style.includes('cid:')) {
+            const updatedStyle = style.replace(/cid:([^"'\s)]+)/gi, (match, cid) => {
+                let attachment = inlineAttachments.get(cid.trim());
+                if (!attachment) {
+                    // Try without angle brackets
+                    const cleanCid = cid.trim().replace(/^<|>$/g, '');
+                    attachment = inlineAttachments.get(cleanCid);
+                }
+                if (!attachment) {
+                    // Try case-insensitive
+                    for (const [key, value] of inlineAttachments.entries()) {
+                        if (key.toLowerCase() === cid.trim().toLowerCase()) {
+                            attachment = value;
+                            break;
+                        }
+                    }
+                }
+                return attachment && attachment.blobUrl ? attachment.blobUrl : match;
+            });
+            if (updatedStyle !== style) {
+                el.setAttribute('style', updatedStyle);
+            }
+        }
+    });
+    
+    return tempDiv.innerHTML;
 }
 
 // Function to download an attachment
