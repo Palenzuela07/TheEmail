@@ -2420,11 +2420,16 @@ async function switchSection(section) {
         searchBar.style.display = 'flex';
     }
     
-    // Update active states
+    // Clear ALL active states from sidebar items first
     document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    
+    // Activate only the main Inbox nav-item
+    const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
+    if (inboxNavItem) {
+        inboxNavItem.classList.add('active');
+    }
     
     // Switch to primary tab immediately
     await switchTab('primary');
@@ -4581,11 +4586,17 @@ async function switchTab(category) {
         
         console.log("Switching to category:", category);
         
-        // ENHANCED: Clear active class from all tabs first
-        const allTabs = document.querySelectorAll('.email-tab, .sub-nav-item');
-        allTabs.forEach(tab => tab.classList.remove('active'));
+        // Clear active class from ALL sidebar items (nav-items and sub-nav-items) first
+        document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
+            item.classList.remove('active');
+        });
         
-        // ENHANCED: Set active class on the correct email category tab
+        // Clear active class from all email tabs
+        document.querySelectorAll('.email-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        
+        // Set active class on the correct email category tab
         const emailTabs = document.querySelectorAll('#email-tabs .email-tab');
         emailTabs.forEach(tab => {
             const tabText = tab.textContent.trim().toLowerCase();
@@ -4603,16 +4614,24 @@ async function switchTab(category) {
             }
         });
         
-        // ENHANCED: Set active class on sidebar items
-        const sidebarItems = document.querySelectorAll('.sub-nav-item');
-        sidebarItems.forEach(item => {
-            const itemText = item.textContent.trim().toLowerCase();
-            
-            if (itemText.includes(category.toLowerCase())) {
-                item.classList.add('active');
-                console.log("Set active class on sidebar item:", itemText);
+        // For primary category, activate the main Inbox nav-item
+        if (category === 'primary') {
+            const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
+            if (inboxNavItem) {
+                inboxNavItem.classList.add('active');
             }
-        });
+        } else {
+            // For sub-categories (starred, important, sent), activate the corresponding sub-nav-item
+            const sidebarItems = document.querySelectorAll('.sub-nav-item');
+            sidebarItems.forEach(item => {
+                const itemText = item.textContent.trim().toLowerCase();
+                
+                if (itemText.includes(category.toLowerCase())) {
+                    item.classList.add('active');
+                    console.log("Set active class on sidebar item:", itemText);
+                }
+            });
+        }
         
         // Hide AI settings if visible
         const aiSettingsContainer = document.getElementById('ai-settings-container');
@@ -5199,11 +5218,16 @@ function closeProfileSettings() {
     document.getElementById('email-tabs').style.display = 'flex';
     document.querySelector('.search-bar').style.display = 'flex';
     
-    // Reset active state in navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
+    // Clear ALL active states from sidebar items first
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    
+    // Activate only the main Inbox nav-item
+    const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
+    if (inboxNavItem) {
+        inboxNavItem.classList.add('active');
+    }
 }
 
 function closeAISettings() {
@@ -5218,11 +5242,16 @@ function closeAISettings() {
     document.getElementById('email-tabs').style.display = 'flex';
     document.querySelector('.search-bar').style.display = 'flex';
     
-    // Reset active state in navigation
-    document.querySelectorAll('.nav-item').forEach(item => {
+    // Clear ALL active states from sidebar items first
+    document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    document.querySelector('.nav-item[onclick*="switchSection"]').classList.add('active');
+    
+    // Activate only the main Inbox nav-item
+    const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
+    if (inboxNavItem) {
+        inboxNavItem.classList.add('active');
+    }
 }
 
 function isEmailContent(text) {

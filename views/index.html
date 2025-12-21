@@ -537,8 +537,9 @@
             cursor: pointer;
             color: #202124;
             margin-bottom: 4px;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease-in-out;
             font-size: 0.9em;
+            position: relative;
         }
 
         .sidebar.collapsed .nav-item {
@@ -552,9 +553,11 @@
         }
 
         .nav-item.active {
-            background: #e8f0fe;
-            color: #1a73e8;
-            font-weight: 500;
+            background: #e8f0fe !important;
+            color: #1a73e8 !important;
+            font-weight: 500 !important;
+            border-left: 4px solid #1a73e8 !important;
+            padding-left: 12px !important;
         }
 
         .nav-icon {
