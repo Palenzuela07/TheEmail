@@ -14,6 +14,9 @@ let searchIndexLoading = false;
 // Track blob URLs for inline attachments to clean up on email close
 let currentEmailBlobUrls = [];
 
+// Store current email thread context for AI chat
+let currentEmailThreadContext = null;
+
 // Function to reset compose window form fields
 function resetComposeWindow() {
     const toField = document.getElementById('compose-to');
@@ -451,7 +454,7 @@ const SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googlea
 // No sensitive keys should be stored in client-side code
 let conversationHistory = [{
     role: "system",
-    content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+    content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
 }];
 
 let tokenClient;
@@ -590,7 +593,7 @@ async function handleAuthResponse(response) {
         // Reset conversation history to initial state
         conversationHistory = [{
             role: "system",
-            content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+            content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
         }];
         
         // Reset chat messages if the element exists
@@ -1208,7 +1211,53 @@ async function openEmail(emailId) {
 
         console.log('Thread messages:', messages.length);
 
-        // Sort messages by date (newest first - most recent at top)
+        // Store thread context for AI chat (chronologically, oldest first)
+        const threadMessagesForContext = [...messages].sort((a, b) => {
+            const dateA = new Date(a.payload.headers.find(h => h.name === 'Date')?.value || 0);
+            const dateB = new Date(b.payload.headers.find(h => h.name === 'Date')?.value || 0);
+            return dateA - dateB; // Oldest first for context
+        });
+        
+        // Build thread context string for AI (limit length to avoid token issues)
+        const threadContextParts = [];
+        threadMessagesForContext.forEach((msg, index) => {
+            const msgHeaders = msg.payload.headers;
+            const from = msgHeaders.find(h => h.name === 'From')?.value || 'Unknown';
+            const date = msgHeaders.find(h => h.name === 'Date')?.value || '';
+            const msgSubject = msgHeaders.find(h => h.name === 'Subject')?.value || '';
+            const msgBody = getBody(msg.payload);
+            const plainText = htmlToPlainText(msgBody);
+            
+            // Extract sender name (remove email address)
+            const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
+            const senderName = senderMatch ? senderMatch[1].trim() : from;
+            
+            // Limit each message to 800 characters to keep context manageable
+            const truncatedText = plainText.trim().substring(0, 800);
+            const textPreview = truncatedText.length < plainText.trim().length ? truncatedText + '...' : truncatedText;
+            
+            threadContextParts.push(`--- Message ${index + 1} ---\nFrom: ${senderName}\nDate: ${date}\nSubject: ${msgSubject}\n\n${textPreview}`);
+        });
+        
+        // Limit total context to ~4000 characters
+        let fullContext = threadContextParts.join('\n\n---\n\n');
+        if (fullContext.length > 4000) {
+            fullContext = fullContext.substring(0, 4000) + '\n\n... (thread continues)';
+        }
+        
+        currentEmailThreadContext = {
+            threadId: threadId,
+            subject: messages[0]?.payload?.headers?.find(h => h.name === 'Subject')?.value || '',
+            context: `EMAIL THREAD CONTEXT:\n\n${fullContext}\n\n--- END OF THREAD ---`,
+            messageCount: messages.length
+        };
+        
+        console.log('Thread context stored for AI chat', { 
+            threadId: threadId, 
+            messageCount: messages.length 
+        });
+
+        // Sort messages by date (newest first - most recent at top) for display
         messages.sort((a, b) => {
             const dateA = new Date(a.payload.headers.find(h => h.name === 'Date')?.value || 0);
             const dateB = new Date(b.payload.headers.find(h => h.name === 'Date')?.value || 0);
@@ -2543,6 +2592,9 @@ function closeEmail() {
     
     // Clear current email reference
     currentEmail = null;
+    
+    // Clear thread context when email is closed
+    currentEmailThreadContext = null;
 }
 
 // Add this helper function to properly decode email text
@@ -2658,7 +2710,7 @@ function resetAIChat() {
     conversationHistory = [
         {
             role: "system",
-            content: "You are a helpful email assistant. Help users compose professional emails. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+            content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
         },
         {
             role: "assistant",
@@ -2804,14 +2856,40 @@ async function sendChatMessage() {
         const aiContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
         const aiSignature = localStorage.getItem('aiSignature') || '';
         
+        // Build the message with thread context if available and context awareness is enabled
+        let messageWithContext = userMessage;
+        let enhancedHistory = [...conversationHistory];
+        
+        if (aiContextAwareness === 'on' && currentEmailThreadContext) {
+            // Add thread context as a system message at the beginning of the conversation
+            // This gives the AI access to the thread without cluttering the user message
+            const contextSystemMessage = {
+                role: "system",
+                content: `You are currently viewing an email thread. Here is the thread context:\n\n${currentEmailThreadContext.context}\n\nYou can reference this thread context to answer questions about the emails, summarize the conversation, or help compose replies.`
+            };
+            
+            // Insert context after the main system message but before user messages
+            if (enhancedHistory.length > 0 && enhancedHistory[0].role === 'system') {
+                enhancedHistory.splice(1, 0, contextSystemMessage);
+            } else {
+                enhancedHistory.unshift(contextSystemMessage);
+            }
+            
+            DEBUG('Including thread context in chat', { 
+                threadId: currentEmailThreadContext.threadId,
+                messageCount: currentEmailThreadContext.messageCount,
+                contextLength: currentEmailThreadContext.context.length
+            });
+        }
+        
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ 
-                message: userMessage,
-                history: conversationHistory,
+                message: messageWithContext,
+                history: enhancedHistory,
                 timestamp: new Date().toISOString(), // Add current timestamp
                 tone: aiTone,
                 length: aiLength,
@@ -3539,20 +3617,21 @@ function initializeModalResize() {
     
     const resizeBottom = document.getElementById('modal-resize-bottom');
     const resizeCorner = document.getElementById('modal-resize-corner');
-    const resizeTopLeft = document.getElementById('modal-resize-top-left');
+    const resizeTopRight = document.getElementById('modal-resize-top-right');
+    const resizeRight = document.getElementById('modal-resize-right');
     
-    if (!resizeBottom || !resizeCorner || !resizeTopLeft) return;
+    if (!resizeBottom || !resizeCorner || !resizeTopRight || !resizeRight) return;
     
     let isResizing = false;
-    let resizeType = null; // 'width', 'height', 'both', or 'top-left'
+    let resizeType = null; // 'width', 'height', 'both', or 'top-right'
     let startX = 0;
     let startY = 0;
     let startWidth = 0;
     let startHeight = 0;
-    let startRight = 0;
+    let startLeft = 0;
     let startBottom = 0;
     
-    // Restore saved size (position stays locked to right/bottom)
+    // Restore saved size (position stays locked to left/bottom)
     const savedWidth = localStorage.getItem('composeModalWidth');
     const savedHeight = localStorage.getItem('composeModalHeight');
     
@@ -3561,10 +3640,10 @@ function initializeModalResize() {
         modal.style.height = savedHeight + 'px';
     }
     
-    // Always keep modal locked to right and bottom
-    modal.style.right = '24px';
+    // Always keep modal locked to left and bottom
+    modal.style.left = '24px';
     modal.style.bottom = '0';
-    modal.style.left = 'auto';
+    modal.style.right = 'auto';
     modal.style.top = 'auto';
     
     function startResize(e, type) {
@@ -3577,10 +3656,10 @@ function initializeModalResize() {
         startWidth = modal.offsetWidth;
         startHeight = modal.offsetHeight;
         
-        // For top-left resize, we need to track position too
-        if (type === 'top-left') {
+        // For top-right resize, we need to track position too
+        if (type === 'top-right') {
             const rect = modal.getBoundingClientRect();
-            startRight = window.innerWidth - rect.right;
+            startLeft = rect.left;
             startBottom = window.innerHeight - rect.bottom;
         }
         
@@ -3592,7 +3671,8 @@ function initializeModalResize() {
         
         if (resizeBottom) resizeBottom.classList.add('dragging');
         if (resizeCorner) resizeCorner.classList.add('dragging');
-        if (resizeTopLeft) resizeTopLeft.classList.add('dragging');
+        if (resizeTopRight) resizeTopRight.classList.add('dragging');
+        if (resizeRight) resizeRight.classList.add('dragging');
         
         e.preventDefault();
     }
@@ -3605,14 +3685,14 @@ function initializeModalResize() {
         const deltaX = e.clientX - startX;
         const deltaY = e.clientY - startY;
         
-        // Only allow top-left resize - keep right and bottom edges fixed
-        if (resizeType === 'top-left') {
+        // Handle top-right resize - keep left and bottom edges fixed
+        if (resizeType === 'top-right') {
             // Calculate new dimensions
-            // Dragging left (negative deltaX) = expand width
-            // Dragging right (positive deltaX) = shrink width
+            // Dragging right (positive deltaX) = expand width
+            // Dragging left (negative deltaX) = shrink width
             // Dragging up (negative deltaY) = expand height
             // Dragging down (positive deltaY) = shrink height
-            let newWidth = startWidth - deltaX;
+            let newWidth = startWidth + deltaX;
             let newHeight = startHeight - deltaY;
             
             // Apply constraints
@@ -3624,33 +3704,65 @@ function initializeModalResize() {
             newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
             newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
             
-            // Apply the new size - right and bottom stay fixed automatically
+            // Apply the new size - left and bottom stay fixed automatically
             modal.style.width = newWidth + 'px';
             modal.style.height = newHeight + 'px';
-            modal.style.right = '24px';
+            modal.style.left = '24px';
             modal.style.bottom = '0';
-            modal.style.left = 'auto';
+            modal.style.right = 'auto';
             modal.style.top = 'auto';
             
             return;
         }
         
-        // Disable other resize types - only top-left is allowed
-        // But keep the code for right/bottom/bottom-right in case we want to re-enable later
-        if (resizeType === 'width' || resizeType === 'both') {
-            let newWidth = startWidth - deltaX; // Subtract because we're resizing from right
+        // Handle corner resize (bottom-left) - keep top and right edges fixed
+        if (resizeType === 'both') {
+            // Calculate new dimensions
+            // Dragging right (positive deltaX) = expand width
+            // Dragging left (negative deltaX) = shrink width
+            // Dragging down (positive deltaY) = expand height
+            // Dragging up (negative deltaY) = shrink height
+            let newWidth = startWidth + deltaX;
+            let newHeight = startHeight + deltaY;
+            
+            // Apply constraints
+            const minWidth = parseInt(getComputedStyle(modal).minWidth) || 400;
+            const minHeight = parseInt(getComputedStyle(modal).minHeight) || 300;
+            const maxWidth = parseInt(getComputedStyle(modal).maxWidth) || window.innerWidth * 0.95;
+            const maxHeight = parseInt(getComputedStyle(modal).maxHeight) || window.innerHeight * 0.95;
+            
+            newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+            newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+            
+            // Apply the new size - left and bottom stay fixed automatically
+            modal.style.width = newWidth + 'px';
+            modal.style.height = newHeight + 'px';
+            modal.style.left = '24px';
+            modal.style.bottom = '0';
+            modal.style.right = 'auto';
+            modal.style.top = 'auto';
+            
+            return;
+        }
+        
+        // Handle width resize (right edge) - keep left edge fixed
+        if (resizeType === 'width') {
+            let newWidth = startWidth + deltaX; // Add because we're resizing from left
             const minWidth = parseInt(getComputedStyle(modal).minWidth) || 400;
             const maxWidth = parseInt(getComputedStyle(modal).maxWidth) || window.innerWidth * 0.95;
             newWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
             modal.style.width = newWidth + 'px';
+            modal.style.left = '24px'; // Keep left fixed
         }
         
-        if (resizeType === 'height' || resizeType === 'both') {
-            let newHeight = startHeight - deltaY; // Subtract because we're resizing from bottom
+        // Handle height resize (bottom edge) - keep bottom edge fixed
+        if (resizeType === 'height') {
+            let newHeight = startHeight + deltaY; // Add because we're resizing from bottom
             const minHeight = parseInt(getComputedStyle(modal).minHeight) || 300;
             const maxHeight = parseInt(getComputedStyle(modal).maxHeight) || window.innerHeight * 0.95;
             newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
             modal.style.height = newHeight + 'px';
+            modal.style.bottom = '0'; // Keep bottom fixed
         }
     }
     
@@ -3664,14 +3776,15 @@ function initializeModalResize() {
         
         if (resizeBottom) resizeBottom.classList.remove('dragging');
         if (resizeCorner) resizeCorner.classList.remove('dragging');
-        if (resizeTopLeft) resizeTopLeft.classList.remove('dragging');
+        if (resizeTopRight) resizeTopRight.classList.remove('dragging');
+        if (resizeRight) resizeRight.classList.remove('dragging');
         
         // Save size to localStorage
         localStorage.setItem('composeModalWidth', modal.offsetWidth);
         localStorage.setItem('composeModalHeight', modal.offsetHeight);
     }
     
-    // Add event listeners for resize handles (only top-left, bottom, and bottom-right)
+    // Add event listeners for resize handles (top-right, bottom, bottom-left corner, and right edge)
     if (resizeBottom) {
         resizeBottom.addEventListener('mousedown', (e) => startResize(e, 'height'));
     }
@@ -3680,11 +3793,15 @@ function initializeModalResize() {
         resizeCorner.addEventListener('mousedown', (e) => startResize(e, 'both'));
     }
     
-    if (resizeTopLeft) {
-        resizeTopLeft.addEventListener('mousedown', (e) => startResize(e, 'top-left'));
+    if (resizeTopRight) {
+        resizeTopRight.addEventListener('mousedown', (e) => startResize(e, 'top-right'));
     }
     
-    // Modal header is not draggable - modal stays locked to right side
+    if (resizeRight) {
+        resizeRight.addEventListener('mousedown', (e) => startResize(e, 'width'));
+    }
+    
+    // Modal header is not draggable - modal stays locked to left side
     
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
@@ -4365,8 +4482,66 @@ async function replyEmail(emailId) {
         document.getElementById('compose-to').value = replyToEmail;
         document.getElementById('compose-subject').value = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
 
-        // Generate AI response using plain text version
-        const aiResponse = await generateAIReply(plainTextBody);
+        // Check if context awareness is enabled
+        const aiContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
+        let contentForAI = plainTextBody;
+        
+        // If context awareness is enabled, fetch the full thread history
+        if (aiContextAwareness === 'on' && email.threadId) {
+            try {
+                DEBUG("Fetching thread history for context-aware reply", { threadId: email.threadId });
+                
+                const threadResponse = await gapi.client.gmail.users.threads.get({
+                    'userId': 'me',
+                    'id': email.threadId,
+                    'format': 'full'
+                });
+                
+                const thread = threadResponse.result;
+                const threadMessages = thread.messages || [];
+                
+                DEBUG("Thread fetched", { messageCount: threadMessages.length });
+                
+                // Sort messages chronologically (oldest first) to show conversation flow
+                threadMessages.sort((a, b) => {
+                    const dateA = new Date(a.payload.headers.find(h => h.name === 'Date')?.value || 0);
+                    const dateB = new Date(b.payload.headers.find(h => h.name === 'Date')?.value || 0);
+                    return dateA - dateB;
+                });
+                
+                // Build thread history string with all messages
+                const threadParts = [];
+                threadMessages.forEach((msg, index) => {
+                    const msgHeaders = msg.payload.headers;
+                    const from = msgHeaders.find(h => h.name === 'From')?.value || 'Unknown';
+                    const date = msgHeaders.find(h => h.name === 'Date')?.value || '';
+                    const msgSubject = msgHeaders.find(h => h.name === 'Subject')?.value || '';
+                    const msgBody = getBody(msg.payload);
+                    const plainText = htmlToPlainText(msgBody);
+                    
+                    // Extract sender name (remove email address)
+                    const senderMatch = from.match(/^"?([^"<]+)"?\s*(?:<.*>)?$/);
+                    const senderName = senderMatch ? senderMatch[1].trim() : from;
+                    
+                    threadParts.push(`--- Message ${index + 1} ---\nFrom: ${senderName}\nDate: ${date}\nSubject: ${msgSubject}\n\n${plainText.trim()}`);
+                });
+                
+                contentForAI = `EMAIL THREAD HISTORY:\n\n${threadParts.join('\n\n---\n\n')}\n\n--- END OF THREAD ---\n\nPlease generate a reply to the most recent message in this thread.`;
+                
+                DEBUG("Thread history built", { 
+                    totalLength: contentForAI.length,
+                    messageCount: threadMessages.length 
+                });
+            } catch (error) {
+                console.warn('Error fetching thread history, using single email:', error);
+                DEBUG("Thread fetch failed, falling back to single email", error);
+                // Fall back to single email if thread fetch fails
+                contentForAI = plainTextBody;
+            }
+        }
+
+        // Generate AI response using thread history if available, or single email
+        const aiResponse = await generateAIReply(contentForAI, email.threadId);
         DEBUG("AI response received", { responseLength: aiResponse?.length || 0 });
 
         // Store email content globally
@@ -4956,18 +5131,39 @@ async function downloadAttachment(messageId, attachmentId, filename, mimeType = 
 // Make function globally accessible
 window.downloadAttachment = downloadAttachment;
 
-async function generateAIReply(emailBody) {
+async function generateAIReply(emailContent, threadId = null) {
     try {
-        DEBUG("Generating AI reply for email", { bodyLength: emailBody?.length || 0 });
+        const isThreadHistory = emailContent.includes('EMAIL THREAD HISTORY:');
+        DEBUG("Generating AI reply", { 
+            bodyLength: emailContent?.length || 0,
+            isThreadHistory: isThreadHistory,
+            threadId: threadId
+        });
         
-        // Prepare a better system prompt for email replies
-        const systemPrompt = `You are an email assistant that generates professional replies.
+        // Prepare system prompt - adjust based on whether we have thread history
+        let systemPrompt = `You are an email assistant that generates professional replies.
 Write complete email responses with proper structure:
 1. Start with an appropriate greeting
-2. Include 2-3 paragraphs that directly address the email content
-3. End with a professional closing (like "Best regards," or "Sincerely,")
-4. Don't ask questions about what to include - just create a complete reply`;
+2. Include 2-3 paragraphs that directly address the email content`;
 
+        if (isThreadHistory) {
+            systemPrompt += `
+3. Reference previous messages in the thread when relevant to maintain context
+4. Acknowledge any questions or points from earlier in the conversation
+5. Keep the reply focused on the most recent message but show awareness of the thread history`;
+        } else {
+            systemPrompt += `
+3. Address the specific points raised in the email`;
+        }
+        
+        systemPrompt += `
+4. End with a professional closing (like "Best regards," or "Sincerely,")
+5. Don't ask questions about what to include - just create a complete reply`;
+
+        // Truncate content if too long (increase limit for thread history)
+        const maxLength = isThreadHistory ? 4000 : 1500;
+        const truncatedContent = emailContent.trim().substring(0, maxLength);
+        
         // Add this as a conversation history item
         const replyHistory = [
             {
@@ -4976,11 +5172,16 @@ Write complete email responses with proper structure:
             },
             {
                 role: "user",
-                content: `Reply to this email: ${emailBody.trim().substring(0, 1500)}` // Limit length to avoid token issues
+                content: isThreadHistory 
+                    ? `Reply to this email thread:\n\n${truncatedContent}`
+                    : `Reply to this email: ${truncatedContent}`
             }
         ];
         
-        DEBUG("Sending request to server API");
+        DEBUG("Sending request to server API", { 
+            contentLength: truncatedContent.length,
+            isThreadHistory: isThreadHistory
+        });
         
         // Use the server's chat endpoint instead of calling OpenAI directly
         // Get AI tone preference, length, context awareness, and signature from localStorage
@@ -4995,7 +5196,9 @@ Write complete email responses with proper structure:
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                message: `Reply to this email: ${emailBody.trim().substring(0, 1500)}`,
+                message: isThreadHistory 
+                    ? `Reply to this email thread:\n\n${truncatedContent}`
+                    : `Reply to this email: ${truncatedContent}`,
                 history: replyHistory,
                 timestamp: new Date().toISOString(),
                 tone: aiTone,
@@ -5085,8 +5288,8 @@ async function switchTab(category) {
         
         console.log("Switching to category:", category);
         
-        // Clear active class from ALL sidebar items (nav-items and sub-nav-items) first
-        document.querySelectorAll('.nav-item, .sub-nav-item').forEach(item => {
+        // Clear active class from sub-nav-items first (but keep main nav-item for email categories)
+        document.querySelectorAll('.sub-nav-item').forEach(item => {
             item.classList.remove('active');
         });
         
@@ -5113,14 +5316,19 @@ async function switchTab(category) {
             }
         });
         
-        // For primary category, activate the main Inbox nav-item
-        if (category === 'primary') {
+        // For main email categories (primary, promotions, social, updates), keep the main Inbox nav-item active
+        if (['primary', 'promotions', 'social', 'updates'].includes(category)) {
             const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
             if (inboxNavItem) {
                 inboxNavItem.classList.add('active');
             }
-        } else {
-            // For sub-categories (starred, important, sent), activate the corresponding sub-nav-item
+        } else if (['starred', 'important', 'sent'].includes(category)) {
+            // For sub-categories (starred, important, sent), clear main nav-item and activate the corresponding sub-nav-item
+            const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
+            if (inboxNavItem) {
+                inboxNavItem.classList.remove('active');
+            }
+            
             const sidebarItems = document.querySelectorAll('.sub-nav-item');
             sidebarItems.forEach(item => {
                 const itemText = item.textContent.trim().toLowerCase();
