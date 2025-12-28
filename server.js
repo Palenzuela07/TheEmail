@@ -277,9 +277,15 @@ KEY INSTRUCTIONS FOR EMAILS:
 6. Always generate complete, ready-to-send emails in proper format
 7. NEVER respond with "What would you like to say" or "What details should I include"
 
+CRITICAL: If there is a THREAD CONTEXT in the conversation history:
+- ALWAYS use the ACTUAL thread content, sender names, and subjects from the thread context
+- When asked about "the original email" or "the first email", refer to the FIRST message in the thread context
+- When generating replies, base them on the ACTUAL thread context, NOT on generic examples
+- Do NOT use the example email below if thread context is available - use the actual thread content instead
+
 For general questions, provide friendly, conversational responses.
 
-For email example:
+Example email format (ONLY use if no thread context is available):
 Subject: Meeting Request for Project Discussion
 
 Dear Team,
@@ -297,11 +303,36 @@ Best regards,
     // Create fresh message array with our system prompt first
     let messages = [systemPrompt];
     
-    // Add all history items EXCEPT system messages
+    // Add all history items, preserving system messages that contain thread context
     if (history && history.length > 0) {
+      // Filter history: keep system messages that contain thread context, remove others
+      const filteredHistory = history.filter(msg => {
+        if (msg.role === 'system') {
+          // Keep system messages that contain thread context (case-insensitive check)
+          const content = msg.content ? msg.content.toLowerCase() : '';
+          const hasThreadContext = content.includes('email thread') || 
+                                   content.includes('thread context') ||
+                                   content.includes('email_thread') ||
+                                   content.includes('thread_context');
+          
+          if (hasThreadContext) {
+            console.log('Preserving thread context system message:', msg.content.substring(0, 200) + '...');
+          }
+          
+          return hasThreadContext;
+        }
+        // Keep all non-system messages
+        return true;
+      });
+      
+      console.log(`Filtered history: ${filteredHistory.length} messages (from ${history.length} total)`);
+      const threadContextMsgs = filteredHistory.filter(m => m.role === 'system');
+      console.log(`Thread context messages found: ${threadContextMsgs.length}`);
+      
+      // Add filtered history after system prompt
       messages = [
         systemPrompt,
-        ...history.filter(msg => msg.role !== 'system')
+        ...filteredHistory
       ];
     }
     

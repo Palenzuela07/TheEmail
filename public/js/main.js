@@ -452,10 +452,33 @@ const SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googlea
 
 // OpenAI API key removed - now handled server-side only
 // No sensitive keys should be stored in client-side code
-let conversationHistory = [{
-    role: "system",
-    content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
-}];
+// Initialize conversation history - load from localStorage if available
+let conversationHistory = (() => {
+    try {
+        const saved = localStorage.getItem('chatHistory');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            // Ensure we have at least the system message
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                // Check if first message is system message, if not add it
+                if (parsed[0].role !== 'system') {
+                    parsed.unshift({
+                        role: "system",
+                        content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+                    });
+                }
+                return parsed;
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to load chat history from localStorage:', e);
+    }
+    // Default initialization
+    return [{
+        role: "system",
+        content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+    }];
+})();
 
 let tokenClient;
 let gapiInited = false;
@@ -580,6 +603,11 @@ async function handleAuthResponse(response) {
         
         // After successful login, clear any previous email drafts and chat history
         localStorage.removeItem('chatHistory');
+        // Reset conversation history to default
+        conversationHistory = [{
+            role: "system",
+            content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
+        }];
         
         // Reset compose fields if they exist
         const composeToField = document.getElementById('compose-to');
@@ -1256,6 +1284,56 @@ async function openEmail(emailId) {
             threadId: threadId, 
             messageCount: messages.length 
         });
+        
+        // Update conversation history with thread context if context awareness is enabled
+        const aiContextAwareness = localStorage.getItem('aiContextAwareness') || 'on';
+        if (aiContextAwareness === 'on') {
+            // Remove any existing thread context system messages
+            conversationHistory = conversationHistory.filter(msg => 
+                !(msg.role === 'system' && 
+                  msg.content && 
+                  (msg.content.includes('email thread') || 
+                   msg.content.includes('thread context') ||
+                   msg.content.includes('EMAIL THREAD') ||
+                   msg.content.includes('THREAD CONTEXT')))
+            );
+            
+            // Add current thread context as a system message after the main system message
+            const contextSystemMessage = {
+                role: "system",
+                content: `=== EMAIL THREAD CONTEXT - READ THIS FIRST ===
+
+You are viewing an email thread. When the user asks questions about emails, ALWAYS refer to the thread context below, NOT to example emails.
+
+THREAD CONTEXT:
+${currentEmailThreadContext.context}
+
+CRITICAL RULES:
+1. When asked "what was the original email?" or "give me the first email" → Return the FIRST message from the thread context above
+2. When asked "what email did you reply to?" → Return the message that was replied to from the thread context
+3. When asked about email content → Use ONLY the actual content from the thread context above
+4. NEVER use the example email "Meeting Request for Project Discussion" - that is just an example format
+5. ALWAYS use the actual sender names, subjects, dates, and content from the thread context
+6. If the user asks for "exact text" → Copy the EXACT text from the thread context, word for word
+
+The thread context above contains the REAL emails. Use it.`
+            };
+            
+            // Insert context after the main system message but before user messages
+            if (conversationHistory.length > 0 && conversationHistory[0].role === 'system') {
+                conversationHistory.splice(1, 0, contextSystemMessage);
+            } else {
+                conversationHistory.unshift(contextSystemMessage);
+            }
+            
+            // Save updated history
+            localStorage.setItem('chatHistory', JSON.stringify(conversationHistory));
+            
+            console.log('Thread context added to conversation history', {
+                threadId: threadId,
+                historyLength: conversationHistory.length
+            });
+        }
 
         // Sort messages by date (newest first - most recent at top) for display
         messages.sort((a, b) => {
@@ -2593,8 +2671,12 @@ function closeEmail() {
     // Clear current email reference
     currentEmail = null;
     
-    // Clear thread context when email is closed
+    // Clear current email reference but KEEP thread context in conversation history
+    // This allows the AI to still reference the thread even after the email viewer is closed
     currentEmailThreadContext = null;
+    
+    // DO NOT remove thread context from conversation history - keep it so AI can reference it
+    // The context will be updated/replaced when a new email is opened
 }
 
 // Add this helper function to properly decode email text
@@ -2691,12 +2773,8 @@ function resetAIChat() {
     const chatMessages = document.getElementById('chat-messages');
     if (!chatMessages) return;
     
-    // Reset to default welcome message
-    chatMessages.innerHTML = `
-        <div class="chat-message ai">
-            How can I help you with your emails today?
-        </div>
-    `;
+    // Reset UI to show conversation history
+    renderChatHistory();
     
     // Reset any state variables
     window.awaitingEmailConfirmation = false;
@@ -2706,19 +2784,48 @@ function resetAIChat() {
     const chatInput = document.getElementById('chat-input');
     if (chatInput) chatInput.value = '';
     
-    // Initialize conversation history with system message
-    conversationHistory = [
-        {
-            role: "system",
-            content: "You are a helpful email assistant. Help users compose professional emails and answer questions about their emails. If the user has an email thread open, you can reference the thread context to answer questions about the conversation. Remember previous parts of the conversation and maintain context. Be concise but thorough in your responses."
-        },
-        {
-            role: "assistant",
-            content: "How can I help you with your emails today?"
-        }
-    ];
+    console.log('AI chat UI has been reset (history preserved)');
+}
+
+// Function to render conversation history in the chat UI
+function renderChatHistory() {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
     
-    console.log('AI chat has been reset');
+    // Clear existing messages
+    chatMessages.innerHTML = '';
+    
+    // Render all messages except the system message
+    conversationHistory.forEach(msg => {
+        if (msg.role === 'system') return; // Skip system messages in UI
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `chat-message ${msg.role}`;
+        messageDiv.textContent = msg.content;
+        chatMessages.appendChild(messageDiv);
+    });
+    
+    // If no messages (only system), show welcome message
+    if (conversationHistory.length <= 1) {
+        chatMessages.innerHTML = `
+            <div class="chat-message ai">
+                How can I help you with your emails today?
+            </div>
+        `;
+        // Add welcome message to history if not present
+        const hasWelcome = conversationHistory.some(m => 
+            m.role === 'assistant' && m.content.includes('How can I help')
+        );
+        if (!hasWelcome) {
+            conversationHistory.push({
+                role: "assistant",
+                content: "How can I help you with your emails today?"
+            });
+        }
+    }
+    
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 // Add DEBUG helper function at the top of the file
@@ -2809,9 +2916,11 @@ async function sendChatMessage() {
                 return;
             }
             
-            // If not a confirmation, clear the state and continue with regular message flow
+            // If not a confirmation, treat it as a regular message and clear confirmation state
+            // This allows users to ask questions even when confirmation is pending
             window.awaitingEmailConfirmation = false;
             window.lastGeneratedEmail = null;
+            // Continue with regular message flow below
         }
         
         // Continue with regular message flow - this is the original function logic
@@ -2860,27 +2969,87 @@ async function sendChatMessage() {
         let messageWithContext = userMessage;
         let enhancedHistory = [...conversationHistory];
         
-        if (aiContextAwareness === 'on' && currentEmailThreadContext) {
-            // Add thread context as a system message at the beginning of the conversation
-            // This gives the AI access to the thread without cluttering the user message
-            const contextSystemMessage = {
-                role: "system",
-                content: `You are currently viewing an email thread. Here is the thread context:\n\n${currentEmailThreadContext.context}\n\nYou can reference this thread context to answer questions about the emails, summarize the conversation, or help compose replies.`
-            };
-            
-            // Insert context after the main system message but before user messages
-            if (enhancedHistory.length > 0 && enhancedHistory[0].role === 'system') {
-                enhancedHistory.splice(1, 0, contextSystemMessage);
+        if (aiContextAwareness === 'on') {
+            // Check if we have a current thread context (email is open)
+            if (currentEmailThreadContext) {
+                // Update or add thread context as a system message
+                // First, remove any existing thread context system messages
+                enhancedHistory = enhancedHistory.filter(msg => {
+                    if (msg.role === 'system' && msg.content) {
+                        const content = msg.content.toLowerCase();
+                        return !(content.includes('email thread') || 
+                                 content.includes('thread context') ||
+                                 content.includes('email_thread') ||
+                                 content.includes('thread_context'));
+                    }
+                    return true;
+                });
+                
+                // Add current thread context as a system message after the main system message
+                const contextSystemMessage = {
+                    role: "system",
+                    content: `=== EMAIL THREAD CONTEXT - READ THIS FIRST ===
+
+You are viewing an email thread. When the user asks questions about emails, ALWAYS refer to the thread context below, NOT to example emails.
+
+THREAD CONTEXT:
+${currentEmailThreadContext.context}
+
+CRITICAL RULES:
+1. When asked "what was the original email?" or "give me the first email" → Return the FIRST message from the thread context above
+2. When asked "what email did you reply to?" → Return the message that was replied to from the thread context
+3. When asked about email content → Use ONLY the actual content from the thread context above
+4. NEVER use the example email "Meeting Request for Project Discussion" - that is just an example format
+5. ALWAYS use the actual sender names, subjects, dates, and content from the thread context
+6. If the user asks for "exact text" → Copy the EXACT text from the thread context, word for word
+
+The thread context above contains the REAL emails. Use it.`
+                };
+                
+                // Insert context after the main system message but before user messages
+                if (enhancedHistory.length > 0 && enhancedHistory[0].role === 'system') {
+                    enhancedHistory.splice(1, 0, contextSystemMessage);
+                } else {
+                    enhancedHistory.unshift(contextSystemMessage);
+                }
+                
+                DEBUG('Including current thread context in chat', { 
+                    threadId: currentEmailThreadContext.threadId,
+                    messageCount: currentEmailThreadContext.messageCount,
+                    contextLength: currentEmailThreadContext.context.length,
+                    historyLength: enhancedHistory.length
+                });
             } else {
-                enhancedHistory.unshift(contextSystemMessage);
+                // No email currently open, but check if we have thread context in history
+                // Keep any existing thread context in history so AI can still reference it
+                const hasThreadContext = enhancedHistory.some(msg => 
+                    msg.role === 'system' && 
+                    msg.content && 
+                    (msg.content.toLowerCase().includes('email thread') || 
+                     msg.content.toLowerCase().includes('thread context') ||
+                     msg.content.toLowerCase().includes('email_thread') ||
+                     msg.content.toLowerCase().includes('thread_context'))
+                );
+                
+                if (hasThreadContext) {
+                    DEBUG('Using preserved thread context from conversation history');
+                } else {
+                    DEBUG('No thread context available in current conversation');
+                }
             }
-            
-            DEBUG('Including thread context in chat', { 
-                threadId: currentEmailThreadContext.threadId,
-                messageCount: currentEmailThreadContext.messageCount,
-                contextLength: currentEmailThreadContext.context.length
-            });
         }
+        
+        // Log what we're sending to help debug
+        const threadContextInHistory = enhancedHistory.find(msg => 
+            msg.role === 'system' && 
+            msg.content && 
+            (msg.content.includes('THREAD CONTEXT') || msg.content.includes('EMAIL THREAD'))
+        );
+        DEBUG('Sending to server', {
+            historyLength: enhancedHistory.length,
+            hasThreadContext: !!threadContextInHistory,
+            threadContextPreview: threadContextInHistory ? threadContextInHistory.content.substring(0, 200) + '...' : 'none'
+        });
         
         const response = await fetch('/api/chat', {
             method: 'POST',
@@ -2928,11 +3097,15 @@ async function sendChatMessage() {
             </div>
         `;
 
-        // Check if response contains an email
+        // Check if response contains an email - but only if it's actually a generated email, not an example
+        // Only trigger confirmation if the user explicitly asked for an email to be generated
+        const userAskedForEmail = checkIfEmailRequest(userMessage);
         const isEmailFormat = containsEmailFormat(aiResponse);
         DEBUG('Is email format detected?', isEmailFormat);
+        DEBUG('User asked for email?', userAskedForEmail);
         
-        if (isEmailFormat) {
+        // Only show confirmation if it's actually a generated email AND user asked for one
+        if (isEmailFormat && userAskedForEmail) {
             DEBUG("Email detected in response", {
                 firstChars: aiResponse.substring(0, 50),
                 length: aiResponse.length
@@ -2949,7 +3122,9 @@ async function sendChatMessage() {
                 </div>
             `;
         } else {
-            DEBUG("No email format detected", {
+            DEBUG("No email confirmation needed", {
+                isEmailFormat,
+                userAskedForEmail,
                 response: aiResponse.substring(0, 100) + "..."
             });
         }
@@ -2974,6 +3149,16 @@ function containsEmailFormat(text) {
     
     // Log the first part of text being checked for debugging
     DEBUG("Checking for email format", { preview: text.substring(0, 100) + "..." });
+
+    // Skip detection if this looks like an example email from system prompt
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('meeting request for project discussion') ||
+        lowerText.includes('[user\'s name]') ||
+        lowerText.includes('example email format') ||
+        lowerText.includes('for email example:')) {
+        DEBUG("Skipping email detection - appears to be example email");
+        return false;
+    }
 
     // Check for common email components
     const hasSubject = text.includes("Subject:") || text.includes("SUBJECT:") || 
@@ -3000,13 +3185,15 @@ function containsEmailFormat(text) {
     
     DEBUG("Email format detection results:", {hasSubject, hasGreeting, hasClosing, hasMultipleLines, hasSignature});
     
-    // Return true if the text has the structure of an email
-    return (hasSubject && hasGreeting) || 
+    // Return true if the text has the structure of an email AND it's not an example
+    const isEmail = (hasSubject && hasGreeting) || 
            (hasSubject && hasClosing) || 
            (hasGreeting && hasClosing) ||
            (hasSubject && hasMultipleLines && hasSignature) ||
            (hasGreeting && hasMultipleLines && hasSignature) ||
            (hasClosing && hasMultipleLines && hasSignature);
+    
+    return isEmail;
 }
 
 // Improve handleChatKeyPress to better handle confirmation
@@ -3195,7 +3382,7 @@ ${replyTo.body.split('\n').map(line => '> ' + line).join('\n')}` : '';
     document.body.classList.add('modal-open');
     setTimeout(() => modal.classList.add('show'), 10);
     
-    // Reset AI chat if needed
+    // Reset AI chat UI (but preserve conversation history)
     resetAIChat();
     
     // Setup event handlers for chat input
