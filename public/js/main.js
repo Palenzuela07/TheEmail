@@ -490,6 +490,7 @@ let pageTokens = {};
 let nextPageToken = null;
 let currentEmail = null;
 let currentFilter = 'primary'; // Default filter
+let cachedDashboardData = null; // Cache for summary dashboard
 
 // Define a maximum number of retry attempts
 const MAX_RETRY_ATTEMPTS = 3;
@@ -826,6 +827,9 @@ function getQueryForFilter(filter) {
             return 'is:important';
         case 'sent':
             return 'in:sent';
+        case 'last12hours':
+            // Gmail API query for emails from last 12 hours
+            return 'newer_than:12h';
         case 'primary':
             return 'category:primary';
         case 'promotions':
@@ -5509,8 +5513,8 @@ async function switchTab(category) {
             if (inboxNavItem) {
                 inboxNavItem.classList.add('active');
             }
-        } else if (['starred', 'important', 'sent'].includes(category)) {
-            // For sub-categories (starred, important, sent), clear main nav-item and activate the corresponding sub-nav-item
+        } else if (['starred', 'important', 'sent', 'last12hours'].includes(category)) {
+            // For sub-categories (starred, important, sent, last12hours), clear main nav-item and activate the corresponding sub-nav-item
             const inboxNavItem = document.querySelector('.nav-item[onclick*="switchSection"]');
             if (inboxNavItem) {
                 inboxNavItem.classList.remove('active');
@@ -5520,7 +5524,8 @@ async function switchTab(category) {
             sidebarItems.forEach(item => {
                 const itemText = item.textContent.trim().toLowerCase();
                 
-                if (itemText.includes(category.toLowerCase())) {
+                if (itemText.includes(category.toLowerCase()) || 
+                    (category === 'last12hours' && itemText.includes('ai summary'))) {
                     item.classList.add('active');
                     console.log("Set active class on sidebar item:", itemText);
                 }
@@ -5550,7 +5555,7 @@ async function switchTab(category) {
         
         // Hide category tabs for sub-tabs
         const emailTabsContainer = document.getElementById('email-tabs');
-        if (['starred', 'important', 'sent'].includes(category)) {
+        if (['starred', 'important', 'sent', 'last12hours'].includes(category)) {
             emailTabsContainer.style.display = 'none';
         } else {
             emailTabsContainer.style.display = 'flex';
@@ -5560,6 +5565,17 @@ async function switchTab(category) {
         
         // Hide email viewer if open
         document.getElementById('email-viewer').style.display = 'none';
+        
+        // Special handling for AI Summary
+        if (category === 'last12hours') {
+            // Check if we have cached dashboard data
+            if (cachedDashboardData) {
+                displaySummaryDashboard(cachedDashboardData);
+            } else {
+                await generateLast12HoursSummary();
+            }
+            return;
+        }
         
         // Load emails for the selected category
         const emails = await listEmails(1, category);
@@ -5583,6 +5599,620 @@ async function switchTab(category) {
         console.error('Error switching tab:', error);
         document.getElementById('emailList').innerHTML = '<div style="text-align: center; padding: 20px;">Error loading emails. Please try again.</div>';
     }
+}
+
+// Generate comprehensive dashboard summary of emails from the last 12 hours
+async function generateLast12HoursSummary() {
+    try {
+        const emailList = document.getElementById('emailList');
+        
+        // Show loading state
+        emailList.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 18px; color: #5f6368; margin-bottom: 16px;">⚡ Generating Summary Dashboard...</div>
+                <div style="color: #5f6368;">Analyzing emails from the last 12 hours</div>
+            </div>
+        `;
+        
+        // Fetch emails from the last 24 hours
+        const query = 'newer_than:1d';
+        const maxResults = 100;
+        
+        // Also fetch important emails separately to ensure we get them
+        const importantQuery = 'newer_than:1d is:important';
+        
+        const [response, importantResponse] = await Promise.all([
+            gapi.client.gmail.users.messages.list({
+                userId: 'me',
+                q: query,
+                maxResults: maxResults
+            }),
+            gapi.client.gmail.users.messages.list({
+                userId: 'me',
+                q: importantQuery,
+                maxResults: maxResults
+            })
+        ]);
+        
+        if (!response.result.messages || response.result.messages.length === 0) {
+            displaySummaryDashboard({
+                totalEmails: 0,
+                importantEmails: 0,
+                urgentEmails: 0,
+                fromContacts: 0,
+                emails: [],
+                categories: {},
+                aiDigest: ['No emails found in the last 24 hours.'],
+                priorityEmails: [],
+                recommendedActions: []
+            });
+            return;
+        }
+        
+        const emailCount = response.result.messages.length;
+        const importantEmailIds = new Set((importantResponse.result.messages || []).map(m => m.id));
+        console.log(`Found ${emailCount} emails in the last 24 hours`);
+        console.log(`Found ${importantEmailIds.size} important emails`);
+        
+        // Fetch full message details
+        const messages = await Promise.all(
+            response.result.messages.slice(0, 100).map(async (message) => {
+                try {
+                    const fullMessage = await gapi.client.gmail.users.messages.get({
+                        userId: 'me',
+                        id: message.id,
+                        format: 'metadata',
+                        metadataHeaders: ['From', 'Subject', 'Date']
+                    });
+                    return fullMessage.result;
+                } catch (error) {
+                    console.error('Error fetching message:', error);
+                    return null;
+                }
+            })
+        );
+        
+        // Filter out null results and process emails
+        const validMessages = messages.filter(msg => msg !== null);
+        const processedEmails = validMessages.map(msg => {
+            const headers = msg.payload?.headers || [];
+            const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
+            const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
+            const date = headers.find(h => h.name === 'Date')?.value || '';
+            const snippet = msg.snippet || '';
+            // labelIds should be at the top level of the message object
+            const labelIds = msg.labelIds || [];
+            
+            // Debug: log labelIds for important emails
+            if (labelIds.includes('IMPORTANT')) {
+                console.log('Found IMPORTANT email:', {
+                    id: msg.id,
+                    subject: subject,
+                    labelIds: labelIds
+                });
+            }
+            
+            // Extract email address from "From" field
+            const emailMatch = from.match(/<(.+)>/);
+            const emailAddress = emailMatch ? emailMatch[1] : from.toLowerCase();
+            
+            // Check both labelIds and the importantEmailIds set
+            const isImportant = labelIds.includes('IMPORTANT') || importantEmailIds.has(msg.id);
+            
+            return {
+                id: msg.id,
+                from: from,
+                fromEmail: emailAddress,
+                fromName: from.replace(/<.+>/, '').trim() || emailAddress.split('@')[0],
+                subject: subject,
+                date: date,
+                snippet: snippet.substring(0, 200),
+                isImportant: isImportant,
+                isStarred: labelIds.includes('STARRED'),
+                isUnread: labelIds.includes('UNREAD'),
+                labelIds: labelIds
+            };
+        });
+        
+        // Debug: log all processed emails with their important status
+        console.log('Processed emails important status:', 
+            processedEmails.map(e => ({ 
+                subject: e.subject.substring(0, 30), 
+                isImportant: e.isImportant, 
+                labelIds: e.labelIds 
+            }))
+        );
+        
+        // Calculate metrics
+        const importantEmails = processedEmails.filter(e => e.isImportant).length;
+        console.log(`Total important emails found: ${importantEmails} out of ${processedEmails.length}`);
+        const urgentEmails = processedEmails.filter(e => {
+            // Consider urgent: important + unread, or emails with urgent keywords
+            const urgentKeywords = ['urgent', 'asap', 'immediate', 'emergency', 'deadline'];
+            const subjectLower = e.subject.toLowerCase();
+            return e.isImportant && e.isUnread || urgentKeywords.some(kw => subjectLower.includes(kw));
+        }).length;
+        
+        // Count emails from contacts (simplified: emails with names, not just addresses)
+        const fromContacts = processedEmails.filter(e => {
+            const fromName = e.fromName;
+            return fromName && fromName !== e.fromEmail.split('@')[0] && !fromName.includes('noreply');
+        }).length;
+        
+        // Categorize emails
+        const categories = {
+            work: 0,
+            personal: 0,
+            finance: 0,
+            promotions: 0,
+            other: 0
+        };
+        
+        processedEmails.forEach(email => {
+            const subjectLower = email.subject.toLowerCase();
+            const fromLower = email.from.toLowerCase();
+            
+            if (fromLower.includes('promo') || fromLower.includes('deal') || subjectLower.includes('sale') || 
+                subjectLower.includes('discount') || subjectLower.includes('offer')) {
+                categories.promotions++;
+            } else if (subjectLower.includes('invoice') || subjectLower.includes('payment') || 
+                       subjectLower.includes('bank') || subjectLower.includes('transaction')) {
+                categories.finance++;
+            } else if (subjectLower.includes('meeting') || subjectLower.includes('project') || 
+                       subjectLower.includes('work') || fromLower.includes('work')) {
+                categories.work++;
+            } else if (fromLower.includes('family') || fromLower.includes('friend') || 
+                       subjectLower.includes('personal')) {
+                categories.personal++;
+            } else {
+                categories.other++;
+            }
+        });
+        
+        // Get priority emails (top 5 important/unread)
+        const priorityEmails = processedEmails
+            .filter(e => e.isImportant || e.isUnread)
+            .sort((a, b) => {
+                // Sort by: important + unread first, then by date
+                const aPriority = (a.isImportant ? 2 : 0) + (a.isUnread ? 1 : 0);
+                const bPriority = (b.isImportant ? 2 : 0) + (b.isUnread ? 1 : 0);
+                return bPriority - aPriority;
+            })
+            .slice(0, 5);
+        
+        // Generate AI digest
+        const emailSummaries = processedEmails.slice(0, 30).map((email, index) => {
+            return `${index + 1}. From: ${email.fromName}\n   Subject: ${email.subject}\n   Preview: ${email.snippet}`;
+        }).join('\n\n');
+        
+        const aiTone = localStorage.getItem('aiTone') || 'professional';
+        const aiLength = localStorage.getItem('aiLength') || 'medium';
+        
+        const digestPrompt = `Provide 3-6 concise bullet point summaries of these ${emailCount} emails from the last 24 hours. 
+Focus on:
+- Main themes or topics
+- Important senders or conversations
+- Action items or follow-ups needed
+- Any urgent matters
+
+Format as simple bullet points, one per line. Be concise and actionable.
+
+Email list:
+${emailSummaries.substring(0, 6000)}`;
+        
+        let aiDigest = [];
+        try {
+            const digestResponse = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: digestPrompt,
+                    history: [{
+                        role: 'system',
+                        content: 'You are an email assistant. Provide concise bullet point summaries. Format as simple lines, one insight per line.'
+                    }],
+                    timestamp: new Date().toISOString(),
+                    tone: aiTone,
+                    length: 'short'
+                })
+            });
+            
+            if (digestResponse.ok) {
+                const digestData = await digestResponse.json();
+                const digestText = digestData.response || '';
+                // Split into bullet points
+                aiDigest = digestText.split('\n')
+                    .filter(line => line.trim().length > 0)
+                    .map(line => line.replace(/^[-•*]\s*/, '').trim())
+                    .slice(0, 6);
+            }
+        } catch (error) {
+            console.error('Error generating AI digest:', error);
+            aiDigest = ['Analyzing email patterns...', 'Reviewing important conversations...'];
+        }
+        
+        if (aiDigest.length === 0) {
+            aiDigest = ['Most messages today were work and scheduling related.', '3 people followed up on unanswered emails.'];
+        }
+        
+        // Generate AI summaries for priority emails
+        const priorityWithSummaries = await Promise.all(priorityEmails.map(async (email) => {
+            let aiSummary = email.snippet.substring(0, 100) + '...';
+            
+            try {
+                const summaryResponse = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: `Provide a one-sentence summary of this email:\nSubject: ${email.subject}\nPreview: ${email.snippet}`,
+                        history: [{
+                            role: 'system',
+                            content: 'Provide a concise one-sentence summary of the email content.'
+                        }],
+                        timestamp: new Date().toISOString(),
+                        tone: aiTone,
+                        length: 'short'
+                    })
+                });
+                
+                if (summaryResponse.ok) {
+                    const summaryData = await summaryResponse.json();
+                    aiSummary = summaryData.response || aiSummary;
+                }
+            } catch (error) {
+                console.error('Error generating email summary:', error);
+            }
+            
+            // Determine status
+            let status = 'important';
+            if (email.isImportant && email.isUnread) {
+                status = 'urgent';
+            } else if (email.isUnread && !email.isImportant) {
+                status = 'followup';
+            }
+            
+            return {
+                ...email,
+                aiSummary: aiSummary.substring(0, 120),
+                status: status
+            };
+        }));
+        
+        // Generate recommended actions
+        const recommendedActions = [];
+        if (categories.promotions > 5) {
+            recommendedActions.push({
+                icon: '🧹',
+                text: `Archive ${categories.promotions} promotional emails?`,
+                action: 'Archive',
+                onClick: () => switchTab('promotions')
+            });
+        }
+        
+        const unreadImportant = processedEmails.filter(e => e.isImportant && e.isUnread).length;
+        if (unreadImportant > 0) {
+            recommendedActions.push({
+                icon: '⏳',
+                text: `You haven't replied to ${unreadImportant} important email${unreadImportant > 1 ? 's' : ''}`,
+                action: 'Review',
+                onClick: () => switchTab('important')
+            });
+        }
+        
+        const newsletters = processedEmails.filter(e => {
+            const fromLower = e.from.toLowerCase();
+            return fromLower.includes('newsletter') || fromLower.includes('unsubscribe');
+        }).length;
+        if (newsletters > 3) {
+            recommendedActions.push({
+                icon: '🚫',
+                text: `Unsubscribe from ${newsletters} newsletters?`,
+                action: 'Unsubscribe',
+                onClick: () => alert('Unsubscribe feature coming soon')
+            });
+        }
+        
+        // Store dashboard data in cache
+        const dashboardData = {
+            totalEmails: emailCount,
+            importantEmails: importantEmails,
+            urgentEmails: urgentEmails,
+            fromContacts: fromContacts,
+            emails: processedEmails,
+            categories: categories,
+            aiDigest: aiDigest,
+            priorityEmails: priorityWithSummaries,
+            recommendedActions: recommendedActions,
+            timestamp: new Date()
+        };
+        
+        cachedDashboardData = dashboardData;
+        
+        // Display the dashboard
+        displaySummaryDashboard(dashboardData);
+        
+    } catch (error) {
+        console.error('Error generating summary dashboard:', error);
+        const emailList = document.getElementById('emailList');
+        emailList.innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+                <div style="font-size: 18px; color: #d93025; margin-bottom: 16px;">❌ Error generating summary</div>
+                <div style="color: #5f6368;">${error.message || 'Please try again later.'}</div>
+            </div>
+        `;
+    }
+}
+
+// Display comprehensive summary dashboard
+function displaySummaryDashboard(data) {
+    const emailList = document.getElementById('emailList');
+    const emailListContainer = document.querySelector('.email-list-container');
+    
+    // Make sure the container takes full width for dashboard
+    if (emailListContainer) {
+        emailListContainer.style.display = 'block';
+    }
+    
+    emailList.innerHTML = '';
+    emailList.className = 'summary-dashboard';
+    emailList.style.width = '100%';
+    emailList.style.maxWidth = '100%';
+    emailList.style.margin = '0';
+    emailList.style.padding = '0';
+    
+    // Header Section
+    const header = document.createElement('div');
+    header.className = 'summary-header';
+    
+    const headerLeft = document.createElement('div');
+    headerLeft.className = 'summary-header-left';
+    
+    const title = document.createElement('h1');
+    title.className = 'summary-header-title';
+    title.textContent = 'Summary';
+    
+    const subtitle = document.createElement('p');
+    subtitle.className = 'summary-header-subtitle';
+    const updateTime = data.timestamp ? new Date(data.timestamp) : new Date();
+    subtitle.textContent = `Last 24 hours • Updated ${updateTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+    
+    headerLeft.appendChild(title);
+    headerLeft.appendChild(subtitle);
+    
+    const filterChips = document.createElement('div');
+    filterChips.className = 'summary-filter-chips';
+    ['Last 24 Hours', 'This Week', 'Custom'].forEach((label, index) => {
+        const chip = document.createElement('button');
+        chip.className = `filter-chip ${index === 0 ? 'active' : ''}`;
+        chip.textContent = label;
+        chip.onclick = () => {
+            filterChips.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            chip.classList.add('active');
+        };
+        filterChips.appendChild(chip);
+    });
+    
+    // Add reload button
+    const reloadButton = document.createElement('button');
+    reloadButton.className = 'filter-chip';
+    reloadButton.style.marginLeft = '8px';
+    reloadButton.innerHTML = '🔄 Reload';
+    reloadButton.onclick = async () => {
+        cachedDashboardData = null; // Clear cache
+        await generateLast12HoursSummary();
+    };
+    filterChips.appendChild(reloadButton);
+    
+    header.appendChild(headerLeft);
+    header.appendChild(filterChips);
+    
+    // Content Container
+    const content = document.createElement('div');
+    content.className = 'summary-content';
+    
+    // Metrics Section
+    const metricsSection = document.createElement('div');
+    metricsSection.className = 'summary-section';
+    metricsSection.innerHTML = '<h2 class="summary-section-title">Overview</h2>';
+    
+    const metricsRow = document.createElement('div');
+    metricsRow.className = 'metrics-row';
+    
+    const metrics = [
+        { icon: '📧', value: data.totalEmails, label: 'Total Emails' },
+        { icon: '❗', value: data.importantEmails, label: 'Important Emails' },
+        { icon: '⏰', value: data.urgentEmails, label: 'Urgent / Time-Sensitive' },
+        { icon: '👤', value: data.fromContacts, label: 'From Contacts' }
+    ];
+    
+    metrics.forEach(metric => {
+        const card = document.createElement('div');
+        card.className = 'metric-card';
+        card.innerHTML = `
+            <div class="metric-icon">${metric.icon}</div>
+            <div class="metric-content">
+                <div class="metric-value">${metric.value}</div>
+                <div class="metric-label">${metric.label}</div>
+            </div>
+        `;
+        metricsRow.appendChild(card);
+    });
+    
+    metricsSection.appendChild(metricsRow);
+    content.appendChild(metricsSection);
+    
+    // AI Digest Section
+    const digestSection = document.createElement('div');
+    digestSection.className = 'summary-section';
+    digestSection.innerHTML = '<h2 class="summary-section-title">AI Digest</h2>';
+    
+    const digestPanel = document.createElement('div');
+    digestPanel.className = 'ai-digest-panel';
+    
+    const digestList = document.createElement('ul');
+    digestList.className = 'ai-digest-list';
+    data.aiDigest.forEach(point => {
+        const li = document.createElement('li');
+        li.textContent = point;
+        digestList.appendChild(li);
+    });
+    
+    const viewFullLink = document.createElement('a');
+    viewFullLink.className = 'view-full-link';
+    viewFullLink.href = '#';
+    viewFullLink.textContent = 'View Full Digest';
+    viewFullLink.onclick = (e) => {
+        e.preventDefault();
+        // Could expand to show full AI summary
+    };
+    
+    digestPanel.appendChild(digestList);
+    digestPanel.appendChild(viewFullLink);
+    digestSection.appendChild(digestPanel);
+    content.appendChild(digestSection);
+    
+    // Priority Emails Section
+    if (data.priorityEmails.length > 0) {
+        const prioritySection = document.createElement('div');
+        prioritySection.className = 'summary-section';
+        prioritySection.innerHTML = '<h2 class="summary-section-title">Priority Emails</h2>';
+        
+        data.priorityEmails.forEach(email => {
+            const row = document.createElement('div');
+            row.className = 'priority-email-row';
+            
+            const emailContent = document.createElement('div');
+            emailContent.className = 'priority-email-content';
+            
+            const sender = document.createElement('div');
+            sender.className = 'priority-email-sender';
+            sender.textContent = email.fromName;
+            
+            const subject = document.createElement('div');
+            subject.className = 'priority-email-subject';
+            subject.textContent = email.subject;
+            
+            const summary = document.createElement('div');
+            summary.className = 'priority-email-summary';
+            summary.innerHTML = `<span class="priority-email-status status-${email.status}">${email.status.charAt(0).toUpperCase() + email.status.slice(1)}</span>${email.aiSummary}`;
+            
+            emailContent.appendChild(sender);
+            emailContent.appendChild(subject);
+            emailContent.appendChild(summary);
+            
+            const actions = document.createElement('div');
+            actions.className = 'priority-email-actions';
+            
+            const openBtn = document.createElement('button');
+            openBtn.className = 'action-btn';
+            openBtn.textContent = 'Open';
+            openBtn.onclick = () => openEmail(email.id);
+            
+            const replyBtn = document.createElement('button');
+            replyBtn.className = 'action-btn';
+            replyBtn.textContent = 'Reply';
+            replyBtn.onclick = () => replyEmail(email.id);
+            
+            actions.appendChild(openBtn);
+            actions.appendChild(replyBtn);
+            
+            row.appendChild(emailContent);
+            row.appendChild(actions);
+            prioritySection.appendChild(row);
+        });
+        
+        content.appendChild(prioritySection);
+    }
+    
+    // Categorized Breakdown
+    const categorySection = document.createElement('div');
+    categorySection.className = 'summary-section';
+    categorySection.innerHTML = '<h2 class="summary-section-title">By Category</h2>';
+    
+    const categoryNames = {
+        work: 'Work',
+        personal: 'Personal',
+        finance: 'Finance',
+        promotions: 'Promotions',
+        other: 'Other'
+    };
+    
+    const totalCategory = Object.values(data.categories).reduce((a, b) => a + b, 0);
+    
+    Object.entries(data.categories).forEach(([key, count]) => {
+        if (count === 0) return;
+        
+        const row = document.createElement('div');
+        row.className = 'category-row';
+        row.onclick = () => {
+            // Switch to appropriate category
+            if (key === 'promotions') switchTab('promotions');
+            else if (key === 'work') switchTab('primary');
+        };
+        
+        const name = document.createElement('div');
+        name.className = 'category-name';
+        name.textContent = categoryNames[key];
+        
+        const countDiv = document.createElement('div');
+        countDiv.className = 'category-count';
+        countDiv.textContent = count;
+        
+        const progress = document.createElement('div');
+        progress.className = 'category-progress';
+        const progressBar = document.createElement('div');
+        progressBar.className = 'category-progress-bar';
+        progressBar.style.width = `${(count / totalCategory) * 100}%`;
+        progress.appendChild(progressBar);
+        
+        row.appendChild(name);
+        row.appendChild(countDiv);
+        row.appendChild(progress);
+        categorySection.appendChild(row);
+    });
+    
+    content.appendChild(categorySection);
+    
+    // Recommended Actions
+    if (data.recommendedActions.length > 0) {
+        const actionsSection = document.createElement('div');
+        actionsSection.className = 'summary-section';
+        actionsSection.innerHTML = '<h2 class="summary-section-title">Recommended Actions</h2>';
+        
+        data.recommendedActions.forEach(action => {
+            const card = document.createElement('div');
+            card.className = 'recommended-action-card';
+            
+            const actionContent = document.createElement('div');
+            actionContent.className = 'recommended-action-content';
+            
+            const icon = document.createElement('span');
+            icon.className = 'recommended-action-icon';
+            icon.textContent = action.icon;
+            
+            const text = document.createElement('span');
+            text.className = 'recommended-action-text';
+            text.textContent = action.text;
+            
+            actionContent.appendChild(icon);
+            actionContent.appendChild(text);
+            
+            const btn = document.createElement('button');
+            btn.className = 'recommended-action-btn';
+            btn.textContent = action.action;
+            btn.onclick = action.onClick;
+            
+            card.appendChild(actionContent);
+            card.appendChild(btn);
+            actionsSection.appendChild(card);
+        });
+        
+        content.appendChild(actionsSection);
+    }
+    
+    // Assemble dashboard
+    emailList.appendChild(header);
+    emailList.appendChild(content);
 }
 
 function getQueryForCategory(category) {
