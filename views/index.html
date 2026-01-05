@@ -3269,18 +3269,22 @@
             margin-bottom: 4px;
             display: flex;
             gap: 4px;
-            padding: 4px 6px; /* Reduced padding */
+            padding: 4px 6px;
             background-color: #f8f9fa;
             border: 1px solid #dadce0;
             border-radius: 4px;
-            height: 34px; /* Reduced height */
+            height: 34px !important; /* Fixed height - never changes */
+            min-height: 34px !important;
+            max-height: 34px !important;
             box-sizing: border-box;
             flex-wrap: nowrap;
             overflow-x: auto;
             overflow-y: hidden;
-            width: calc(100% - 24px); /* Match the width of input fields */
-            margin-left: 12px; /* Match the left margin of input fields */
-            margin-right: 12px; /* Match the right margin of input fields */
+            width: calc(100% - 24px);
+            margin-left: 12px;
+            margin-right: 12px;
+            flex-shrink: 0; /* Prevent shrinking */
+            align-items: center; /* Vertically center buttons */
         }
         
         .editor-toolbar::-webkit-scrollbar {
@@ -3296,15 +3300,20 @@
             background-color: #fff;
             border: 1px solid #dadce0;
             border-radius: 4px;
-            padding: 3px 6px; /* Reduced padding */
+            padding: 3px 6px;
             cursor: pointer;
             transition: all 0.2s;
-            min-width: 26px; /* Reduced width */
-            max-width: 28px; /* Reduced width */
+            min-width: 26px;
+            max-width: 28px;
+            height: 26px !important; /* Fixed height for buttons */
+            min-height: 26px !important;
+            max-height: 26px !important;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px; /* Smaller font size */
+            font-size: 13px;
+            flex-shrink: 0; /* Prevent buttons from shrinking */
+            box-sizing: border-box;
         }
         
         .editor-btn:hover {
@@ -3320,6 +3329,9 @@
         .attachment-btn {
             flex-shrink: 0 !important;
             min-width: 28px !important;
+            height: 26px !important; /* Fixed height to match other buttons */
+            min-height: 26px !important;
+            max-height: 26px !important;
         }
         
         #compose-body {
@@ -3350,6 +3362,8 @@
             border-top: 1px solid #dadce0;
             border-bottom: 1px solid #dadce0;
             margin: 0 12px;
+            flex-shrink: 0; /* Prevent shrinking */
+            box-sizing: border-box;
         }
 
         #attachments-list:not(:empty) {

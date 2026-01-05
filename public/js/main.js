@@ -2785,8 +2785,12 @@ function resetAIChat() {
     const chatMessages = document.getElementById('chat-messages');
     if (!chatMessages) return;
     
-    // Reset UI to show conversation history
-    renderChatHistory();
+    // Clear the chat messages and show a fresh welcome message
+    chatMessages.innerHTML = `
+        <div class="chat-message ai">
+            Hello! How can I help you today?
+        </div>
+    `;
     
     // Reset any state variables
     window.awaitingEmailConfirmation = false;
@@ -2796,7 +2800,7 @@ function resetAIChat() {
     const chatInput = document.getElementById('chat-input');
     if (chatInput) chatInput.value = '';
     
-    console.log('AI chat UI has been reset (history preserved)');
+    console.log('AI chat UI has been reset with fresh welcome message');
 }
 
 // Function to render conversation history in the chat UI
