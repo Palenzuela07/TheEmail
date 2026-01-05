@@ -1173,6 +1173,19 @@ async function openEmail(emailId) {
             `;
         }
 
+        // Ensure container is in flex mode for split view (fixes issue when opening from summary dashboard)
+        const emailListContainer = document.querySelector('.email-list-container');
+        if (emailListContainer) {
+            emailListContainer.style.display = 'flex';
+            emailListContainer.classList.add('viewer-open');
+        }
+        
+        // Remove summary-dashboard class and reset width if present
+        if (emailList && emailList.classList.contains('summary-dashboard')) {
+            emailList.classList.remove('summary-dashboard');
+            emailList.style.maxWidth = '';
+        }
+        
         // Show loading state
         emailContent.innerHTML = '<div style="text-align: center; padding: 20px;">Loading email...</div>';
         emailViewer.style.display = 'flex';
@@ -1188,9 +1201,8 @@ async function openEmail(emailId) {
                 emailList.style.width = savedWidth + 'px';
             } else {
                 // Set initial width to 40% of container
-                const container = document.querySelector('.email-list-container');
-                if (container) {
-                    const initialWidth = container.offsetWidth * 0.4;
+                if (emailListContainer) {
+                    const initialWidth = emailListContainer.offsetWidth * 0.4;
                     emailList.style.width = initialWidth + 'px';
                 }
             }
@@ -1209,11 +1221,7 @@ async function openEmail(emailId) {
             clickedEmailItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
         
-        // Add class to container to indicate viewer is open
-        const emailListContainer = document.querySelector('.email-list-container');
-        if (emailListContainer) {
-            emailListContainer.classList.add('viewer-open');
-        }
+        // Keep email list and tabs visible - they'll be side by side
         // Keep email list and tabs visible - they'll be side by side
 
         // Mark the email as read when opened
