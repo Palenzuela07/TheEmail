@@ -4171,23 +4171,20 @@ async function generateAIEmail() {
             loadingMessage.remove();
         }
         
-        // Show the generated email
+        // Store email content globally
+        window.lastGeneratedEmail = generatedEmail;
+        window.awaitingEmailConfirmation = true;
+        
+        // Show the generated email with confirmation prompt
         messagesContainer.innerHTML += `
             <div class="chat-message ai">
                 ${formatEmailContent(generatedEmail)}
             </div>
+            <div class="chat-message ai confirmation-prompt" style="margin-top: 10px; color: #1a73e8; font-weight: bold;">
+                Would you like me to move this email to the compose area? (Yes/No)
+            </div>
         `;
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
-        // Open the compose window
-        openComposeModal();
-        
-        // Move the email to compose without waiting for confirmation
-        // Store the generated email for potential future use
-        window.lastGeneratedEmail = generatedEmail;
-        
-        // Automatically move to compose window
-        moveEmailToCompose(generatedEmail);
         
         // Clear the chat input
         chatInput.value = '';
