@@ -1,4 +1,4 @@
-# The Email
+# EmailEmailAI
 
 An AI-powered Gmail client. Sign in with your Google account to read, search, organize and send email in a custom interface, with an AI assistant that drafts emails and replies, summarizes your inbox, and adapts to your preferred writing style.
 
